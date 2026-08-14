@@ -70,7 +70,7 @@ st.markdown("""
     header {visibility: hidden;}
 
     /* ========================================
-       MOBILE APP HEADER
+       APP HEADER
        ======================================== */
     .app-header {
         background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%);
@@ -150,7 +150,7 @@ st.markdown("""
     }
 
     /* ========================================
-       SEARCH BAR - MOBILE FRIENDLY
+       SEARCH SECTION
        ======================================== */
     .search-section {
         background: var(--bg-secondary);
@@ -158,6 +158,22 @@ st.markdown("""
         padding: 1rem;
         border: 1px solid var(--border-color);
         margin-bottom: 1rem;
+    }
+
+    .search-hint {
+        color: var(--text-muted);
+        font-size: 0.7rem;
+        margin-top: 0.3rem;
+        padding: 0 0.3rem;
+    }
+
+    .search-hint code {
+        background: var(--bg-input);
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
     }
 
     .search-bar {
@@ -240,7 +256,7 @@ st.markdown("""
     }
 
     /* ========================================
-       STATS CARDS - MOBILE OPTIMIZED
+       STATS CARDS
        ======================================== */
     .stats-grid {
         display: grid;
@@ -272,7 +288,7 @@ st.markdown("""
     }
 
     /* ========================================
-       SITE CARDS - MOBILE OPTIMIZED
+       SITE CARDS
        ======================================== */
     .site-card {
         background: var(--bg-card);
@@ -485,7 +501,7 @@ st.markdown("""
     }
 
     /* ========================================
-       BOTTOM NAVIGATION - MOBILE APP STYLE
+       BOTTOM NAVIGATION
        ======================================== */
     .bottom-nav {
         position: fixed;
@@ -533,7 +549,32 @@ st.markdown("""
     }
 
     /* ========================================
-       WEB APP - DESKTOP ENHANCEMENTS
+       SEARCH HIGHLIGHT
+       ======================================== */
+    .search-highlight {
+        background: var(--highlight-yellow);
+        color: #0a0a0f;
+        padding: 0.05rem 0.2rem;
+        border-radius: 3px;
+        font-weight: 600;
+    }
+
+    /* ========================================
+       EMPTY STATE
+       ======================================== */
+    .empty-state {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: var(--text-muted);
+    }
+
+    .empty-state .empty-icon {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* ========================================
+       WEB APP - DESKTOP
        ======================================== */
     @media (min-width: 769px) {
         .main .block-container {
@@ -642,7 +683,7 @@ st.markdown("""
     }
 
     /* ========================================
-       TABLET OPTIMIZATION
+       TABLET
        ======================================== */
     @media (min-width: 481px) and (max-width: 768px) {
         .stats-grid {
@@ -662,7 +703,7 @@ st.markdown("""
     }
 
     /* ========================================
-       SMALL PHONE OPTIMIZATION
+       SMALL PHONE
        ======================================== */
     @media (max-width: 380px) {
         .app-logo-text {
@@ -692,31 +733,6 @@ st.markdown("""
             font-size: 0.65rem;
             padding: 0.4rem 0.6rem;
         }
-    }
-
-    /* ========================================
-       SEARCH HIGHLIGHT
-       ======================================== */
-    .search-highlight {
-        background: var(--highlight-yellow);
-        color: #0a0a0f;
-        padding: 0.05rem 0.2rem;
-        border-radius: 3px;
-        font-weight: 600;
-    }
-
-    /* ========================================
-       LOADING / EMPTY STATES
-       ======================================== */
-    .empty-state {
-        text-align: center;
-        padding: 2rem 1rem;
-        color: var(--text-muted);
-    }
-
-    .empty-state .empty-icon {
-        font-size: 3rem;
-        margin-bottom: 0.5rem;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -793,6 +809,45 @@ def highlight_text(text, search_term):
         return pattern.sub(lambda m: f'<span class="search-highlight">{m.group()}</span>', str(text))
     except:
         return text
+
+def perform_search(df, search_input):
+    """
+    Perform search on PLAID and SITE columns.
+    Supports multiple terms separated by commas.
+    Returns exact matches only.
+    """
+    if not search_input or search_input.strip() == '':
+        return pd.DataFrame()
+    
+    # Split by comma and clean each term
+    search_terms = [term.strip() for term in search_input.split(',') if term.strip()]
+    
+    if not search_terms:
+        return pd.DataFrame()
+    
+    # Create mask for each term
+    mask = pd.Series([False] * len(df))
+    
+    for term in search_terms:
+        term_mask = pd.Series([False] * len(df))
+        
+        # Search in PLAID (exact match, case-insensitive)
+        if 'PLAID' in df.columns:
+            term_mask |= df['PLAID'].astype(str).str.strip().str.upper() == term.upper()
+        
+        # Search in SITE (exact match, case-insensitive)
+        if 'SITE' in df.columns:
+            term_mask |= df['SITE'].astype(str).str.strip().str.upper() == term.upper()
+        
+        # Also support partial matches (contains) for flexibility
+        if 'PLAID' in df.columns:
+            term_mask |= df['PLAID'].astype(str).str.contains(term, case=False, na=False)
+        if 'SITE' in df.columns:
+            term_mask |= df['SITE'].astype(str).str.contains(term, case=False, na=False)
+        
+        mask |= term_mask
+    
+    return df[mask].copy()
 
 def create_site_card_html(row, search_term=""):
     """Create HTML for a site card optimized for mobile"""
@@ -1151,7 +1206,7 @@ def show_about():
     features = [
         ("📍 GPS Navigation", "One-click Google Maps"),
         ("📞 Click-to-Call", "Direct contact dialing"),
-        ("🔍 Search", "By PLAID or Site Name"),
+        ("🔍 Multi-Search", "Search multiple sites with commas"),
         ("🗺️ Map View", "Interactive site visualization"),
         ("📄 PDF Export", "Multiple sites export"),
         ("📱 Mobile Ready", "Fully responsive design"),
@@ -1186,7 +1241,6 @@ def show_main():
     
     # Search Section
     st.markdown('<div class="search-section">', unsafe_allow_html=True)
-    st.markdown('<div class="search-bar">', unsafe_allow_html=True)
     
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -1194,13 +1248,20 @@ def show_main():
             "Search",
             value=st.session_state.search_term,
             placeholder="🔍 Search PLAID or Site Name...",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            help="Separate multiple searches with commas (e.g., SITE001, Alpha, PLAID002)"
         )
     with col2:
-        search_btn = st.button("🔍", use_container_width=True)
-        clear_btn = st.button("✖", use_container_width=True)
+        search_btn = st.button("🔍 Search", use_container_width=True)
+        clear_btn = st.button("✖ Clear", use_container_width=True)
     
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Search hint
+    st.markdown("""
+    <div class="search-hint">
+        💡 Search for multiple sites: <code>SITE001, Alpha, PLAID002</code> (separate with commas)
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown('</div>', unsafe_allow_html=True)
     
     if clear_btn:
@@ -1212,30 +1273,37 @@ def show_main():
     if search_btn and search_term:
         st.session_state.search_term = search_term
         st.session_state.has_searched = True
-        
-        mask = pd.Series([False] * len(df))
-        if 'PLAID' in df.columns:
-            mask |= df['PLAID'].astype(str).str.contains(search_term, case=False, na=False)
-        if 'SITE' in df.columns:
-            mask |= df['SITE'].astype(str).str.contains(search_term, case=False, na=False)
-        
-        st.session_state.search_results = df[mask].copy()
+        st.session_state.search_results = perform_search(df, search_term)
     
     # Display Results or Welcome
     if st.session_state.has_searched:
         filtered_df = st.session_state.search_results
         
         if filtered_df is None or len(filtered_df) == 0:
-            st.markdown("""
+            # Show which terms were searched
+            terms = [term.strip() for term in search_term.split(',') if term.strip()]
+            terms_display = ', '.join([f'"{t}"' for t in terms])
+            
+            st.markdown(f"""
             <div class="welcome-screen">
                 <div class="welcome-icon">🔍</div>
                 <div class="welcome-title">No Results Found</div>
-                <div class="welcome-subtitle">Try searching with a different PLAID or Site Name.</div>
-                <div class="welcome-hint">💡 Search is case-insensitive and matches partial terms</div>
+                <div class="welcome-subtitle">
+                    No sites found matching: {terms_display}
+                </div>
+                <div class="welcome-hint">
+                    💡 Try checking the spelling or use partial matches<br>
+                    Separate multiple searches with commas
+                </div>
             </div>
             """, unsafe_allow_html=True)
             bottom_nav()
             return
+        
+        # Show what was searched
+        terms = [term.strip() for term in search_term.split(',') if term.strip()]
+        terms_display = ', '.join([f'"{t}"' for t in terms])
+        st.markdown(f"**Found {len(filtered_df)} site(s)** matching: {terms_display}")
         
         # Stats
         stats = {
@@ -1333,8 +1401,13 @@ def show_main():
         <div class="welcome-screen">
             <div class="welcome-icon">📍</div>
             <div class="welcome-title">Welcome to GPS Extractor</div>
-            <div class="welcome-subtitle">Search for sites using PLAID or Site Name to get started.</div>
-            <div class="welcome-hint">💡 Enter a PLAID or Site Name in the search box above</div>
+            <div class="welcome-subtitle">
+                Search for sites using PLAID or Site Name.<br>
+                Search multiple sites with commas.
+            </div>
+            <div class="welcome-hint">
+                💡 Example: <code>SITE001, Alpha, PLAID002</code>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
