@@ -810,11 +810,12 @@ def highlight_text(text, search_term):
     except:
         return text
 
-def perform_exact_search(df, search_input):
+def perform_intelligent_search(df, search_input):
     """
-    Perform EXACT MATCH search on PLAID and SITE columns.
+    Perform intelligent search on PLAID and SITE columns.
+    - First tries exact match (case-insensitive)
+    - Then tries contains match (for partial searches)
     Supports multiple terms separated by commas.
-    Only returns exact matches (case-insensitive).
     """
     if not search_input or search_input.strip() == '':
         return pd.DataFrame()
@@ -826,24 +827,40 @@ def perform_exact_search(df, search_input):
         return pd.DataFrame()
     
     # Create mask for each term
-    mask = pd.Series([False] * len(df))
+    final_mask = pd.Series([False] * len(df))
+    matched_terms = []
     
     for term in search_terms:
         term_mask = pd.Series([False] * len(df))
+        term_found = False
         
-        # Search in PLAID (EXACT match, case-insensitive)
+        # 1. Try EXACT match first (case-insensitive, trimmed)
         if 'PLAID' in df.columns:
-            # Exact match: strip whitespace, convert to uppercase, compare
-            term_mask |= df['PLAID'].astype(str).str.strip().str.upper() == term.upper()
+            exact_mask_plaid = df['PLAID'].astype(str).str.strip().str.upper() == term.upper()
+            term_mask |= exact_mask_plaid
+            if exact_mask_plaid.any():
+                term_found = True
         
-        # Search in SITE (EXACT match, case-insensitive)
         if 'SITE' in df.columns:
-            # Exact match: strip whitespace, convert to uppercase, compare
-            term_mask |= df['SITE'].astype(str).str.strip().str.upper() == term.upper()
+            exact_mask_site = df['SITE'].astype(str).str.strip().str.upper() == term.upper()
+            term_mask |= exact_mask_site
+            if exact_mask_site.any():
+                term_found = True
         
-        mask |= term_mask
+        # 2. If no exact match, try CONTAINS match (for partial searching)
+        if not term_found:
+            if 'PLAID' in df.columns:
+                contains_mask_plaid = df['PLAID'].astype(str).str.contains(term, case=False, na=False)
+                term_mask |= contains_mask_plaid
+            
+            if 'SITE' in df.columns:
+                contains_mask_site = df['SITE'].astype(str).str.contains(term, case=False, na=False)
+                term_mask |= contains_mask_site
+        
+        final_mask |= term_mask
+        matched_terms.append(term)
     
-    return df[mask].copy()
+    return df[final_mask].copy()
 
 def create_site_card_html(row, search_term=""):
     """Create HTML for a site card optimized for mobile"""
@@ -1202,7 +1219,7 @@ def show_about():
     features = [
         ("📍 GPS Navigation", "One-click Google Maps"),
         ("📞 Click-to-Call", "Direct contact dialing"),
-        ("🔍 Exact Match Search", "Search multiple sites with commas"),
+        ("🔍 Smart Search", "Exact match first, then partial"),
         ("🗺️ Map View", "Interactive site visualization"),
         ("📄 PDF Export", "Multiple sites export"),
         ("📱 Mobile Ready", "Fully responsive design"),
@@ -1245,7 +1262,7 @@ def show_main():
             value=st.session_state.search_term,
             placeholder="🔍 Search PLAID or Site Name...",
             label_visibility="collapsed",
-            help="Search for EXACT matches. Separate multiple searches with commas."
+            help="Search multiple sites with commas"
         )
     with col2:
         search_btn = st.button("🔍 Search", use_container_width=True)
@@ -1254,7 +1271,7 @@ def show_main():
     # Search hint
     st.markdown("""
     <div class="search-hint">
-        🔍 <strong>Exact Match Only</strong> · Separate multiple searches with commas: 
+        🔍 <strong>Smart Search</strong> · Exact matches first, then partial · Separate multiple with commas: 
         <code>Min97, SITE001, PLAID002</code>
     </div>
     """, unsafe_allow_html=True)
@@ -1270,7 +1287,7 @@ def show_main():
     if search_btn and search_term:
         st.session_state.search_term = search_term
         st.session_state.has_searched = True
-        st.session_state.search_results = perform_exact_search(df, search_term)
+        st.session_state.search_results = perform_intelligent_search(df, search_term)
     
     # Display Results or Welcome
     if st.session_state.has_searched:
@@ -1284,13 +1301,12 @@ def show_main():
             st.markdown(f"""
             <div class="welcome-screen">
                 <div class="welcome-icon">🔍</div>
-                <div class="welcome-title">No Exact Matches Found</div>
+                <div class="welcome-title">No Results Found</div>
                 <div class="welcome-subtitle">
-                    No sites found matching exactly: {terms_display}
+                    No sites found matching: {terms_display}
                 </div>
                 <div class="welcome-hint">
-                    💡 Search uses <strong>EXACT MATCH</strong> (case-insensitive)<br>
-                    Try checking the spelling or use partial matching with wildcards
+                    💡 Try checking the spelling or use partial matching
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -1300,7 +1316,7 @@ def show_main():
         # Show what was searched
         terms = [term.strip() for term in search_term.split(',') if term.strip()]
         terms_display = ', '.join([f'"{t}"' for t in terms])
-        st.markdown(f"**Found {len(filtered_df)} site(s)** matching exactly: {terms_display}")
+        st.markdown(f"**Found {len(filtered_df)} site(s)** matching: {terms_display}")
         
         # Stats
         stats = {
@@ -1399,7 +1415,7 @@ def show_main():
             <div class="welcome-icon">📍</div>
             <div class="welcome-title">Welcome to GPS Extractor</div>
             <div class="welcome-subtitle">
-                Search for sites using <strong>EXACT MATCH</strong> on PLAID or Site Name.<br>
+                Search for sites using PLAID or Site Name.<br>
                 Search multiple sites with commas.
             </div>
             <div class="welcome-hint">
