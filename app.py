@@ -14,15 +14,17 @@ st.set_page_config(
     page_title="GPS Extractor • Globe FO",
     page_icon="📍",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ------------------------------
-# DARK THEME CUSTOM CSS
+# DARK THEME CUSTOM CSS - MOBILE APP + WEB APP
 # ------------------------------
 st.markdown("""
     <style>
-    /* Dark theme variables */
+    /* ========================================
+       CSS VARIABLES
+       ======================================== */
     :root {
         --bg-primary: #0a0a0f;
         --bg-secondary: #14141e;
@@ -40,411 +42,681 @@ st.markdown("""
         --accent-purple: #8b5cf6;
         --shadow-color: rgba(0, 0, 0, 0.5);
         --highlight-yellow: #fbbf24;
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    /* Main container */
-    .main .block-container {
-        padding: 1rem 1.5rem;
-        background: var(--bg-primary);
+    /* ========================================
+       GLOBAL RESET & BASE
+       ======================================== */
+    * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
     }
-    
-    /* Override Streamlit default background */
+
+    .main .block-container {
+        padding: 0.5rem 0.8rem 5rem 0.8rem;
+        background: var(--bg-primary);
+        max-width: 100% !important;
+    }
+
     .stApp {
         background: var(--bg-primary);
     }
-    
-    /* Card style */
+
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* ========================================
+       MOBILE APP HEADER
+       ======================================== */
+    .app-header {
+        background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%);
+        padding: 0.8rem 1rem;
+        margin: -0.5rem -0.8rem 1rem -0.8rem;
+        border-bottom: 1px solid var(--border-color);
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    .app-header-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .app-logo {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .app-logo-icon {
+        font-size: 1.5rem;
+    }
+
+    .app-logo-text {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+
+    .app-logo-badge {
+        background: rgba(79, 140, 247, 0.2);
+        color: var(--accent-blue);
+        padding: 0.15rem 0.6rem;
+        border-radius: 40px;
+        font-size: 0.6rem;
+        font-weight: 500;
+        border: 1px solid rgba(79, 140, 247, 0.2);
+        margin-left: 0.3rem;
+    }
+
+    .app-nav {
+        display: flex;
+        gap: 0.3rem;
+        align-items: center;
+    }
+
+    .nav-btn {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        padding: 0.4rem 0.8rem;
+        border-radius: 40px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        white-space: nowrap;
+    }
+
+    .nav-btn:hover, .nav-btn.active {
+        background: var(--bg-card);
+        border-color: var(--accent-blue);
+        color: var(--text-primary);
+    }
+
+    /* ========================================
+       SEARCH BAR - MOBILE FRIENDLY
+       ======================================== */
+    .search-section {
+        background: var(--bg-secondary);
+        border-radius: 16px;
+        padding: 1rem;
+        border: 1px solid var(--border-color);
+        margin-bottom: 1rem;
+    }
+
+    .search-bar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .search-input-wrapper {
+        flex: 1;
+        position: relative;
+    }
+
+    .search-input-wrapper .search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: 1rem;
+    }
+
+    .search-input-wrapper input {
+        width: 100%;
+        padding: 0.7rem 0.7rem 0.7rem 2.5rem;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        transition: all 0.2s;
+        outline: none;
+    }
+
+    .search-input-wrapper input:focus {
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.15);
+    }
+
+    .search-input-wrapper input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .search-actions {
+        display: flex;
+        gap: 0.4rem;
+    }
+
+    .search-btn, .clear-btn {
+        padding: 0.7rem 1rem;
+        border-radius: 12px;
+        border: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+        min-width: 60px;
+    }
+
+    .search-btn {
+        background: var(--accent-blue);
+        color: white;
+    }
+
+    .search-btn:hover {
+        background: var(--accent-blue-hover);
+        transform: scale(1.02);
+    }
+
+    .clear-btn {
+        background: var(--bg-card);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+    }
+
+    .clear-btn:hover {
+        background: var(--bg-card-hover);
+        color: var(--text-primary);
+    }
+
+    /* ========================================
+       STATS CARDS - MOBILE OPTIMIZED
+       ======================================== */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+        margin: 0.5rem 0 1rem 0;
+    }
+
+    .stat-card {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        padding: 0.8rem;
+        border: 1px solid var(--border-color);
+        text-align: center;
+    }
+
+    .stat-number {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: block;
+    }
+
+    .stat-label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        display: block;
+        margin-top: 0.15rem;
+    }
+
+    /* ========================================
+       SITE CARDS - MOBILE OPTIMIZED
+       ======================================== */
     .site-card {
         background: var(--bg-card);
         border-radius: 16px;
-        padding: 1.2rem 1.5rem;
-        margin-bottom: 1.2rem;
+        padding: 1rem;
+        margin-bottom: 0.8rem;
         border: 1px solid var(--border-color);
         transition: all 0.3s ease;
         box-shadow: 0 4px 20px var(--shadow-color);
-        animation: fadeIn 0.5s ease-in;
+        animation: fadeIn 0.4s ease-out;
     }
-    .site-card:hover {
-        background: var(--bg-card-hover);
-        border-color: var(--accent-purple);
-        box-shadow: 0 8px 30px var(--shadow-color);
-        transform: translateY(-2px);
+
+    .site-card:active {
+        transform: scale(0.98);
     }
-    
+
     @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
+        from { opacity: 0; transform: translateY(12px); }
         to { opacity: 1; transform: translateY(0); }
     }
-    
-    .site-title {
+
+    .site-header {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .site-name {
+        font-size: 1rem;
         font-weight: 600;
-        font-size: 1.2rem;
         color: var(--text-primary);
-        margin-bottom: 0.25rem;
+        word-break: break-word;
     }
-    .site-sub {
-        font-size: 0.9rem;
-        color: var(--text-secondary);
-    }
-    
-    .badge {
-        background: rgba(79, 140, 247, 0.15);
-        color: var(--accent-blue);
-        padding: 0.2rem 0.8rem;
-        border-radius: 40px;
-        font-size: 0.75rem;
-        font-weight: 500;
-        display: inline-block;
-        margin-right: 0.4rem;
-        border: 1px solid rgba(79, 140, 247, 0.2);
-    }
-    .badge-plaid {
+
+    .site-plaid {
         background: rgba(139, 92, 246, 0.2);
         color: var(--accent-purple);
-        padding: 0.2rem 0.8rem;
+        padding: 0.15rem 0.6rem;
         border-radius: 40px;
-        font-size: 0.75rem;
+        font-size: 0.65rem;
         font-weight: 600;
-        display: inline-block;
-        margin-right: 0.4rem;
         border: 1px solid rgba(139, 92, 246, 0.2);
+        display: inline-block;
+        margin-left: 0.3rem;
+        white-space: nowrap;
     }
-    .badge-territory {
+
+    .site-location {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+        word-break: break-word;
+    }
+
+    .site-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .tag {
+        padding: 0.15rem 0.6rem;
+        border-radius: 40px;
+        font-size: 0.6rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+    }
+
+    .tag-territory {
         background: rgba(52, 211, 153, 0.15);
         color: var(--accent-green);
-        padding: 0.2rem 0.8rem;
-        border-radius: 40px;
-        font-size: 0.75rem;
-        font-weight: 500;
-        display: inline-block;
-        margin-right: 0.4rem;
-        border: 1px solid rgba(52, 211, 153, 0.2);
+        border-color: rgba(52, 211, 153, 0.2);
     }
-    .badge-towerco {
+
+    .tag-towerco {
         background: rgba(251, 191, 36, 0.15);
         color: var(--highlight-yellow);
-        padding: 0.2rem 0.8rem;
-        border-radius: 40px;
-        font-size: 0.75rem;
-        font-weight: 500;
-        display: inline-block;
-        margin-right: 0.4rem;
-        border: 1px solid rgba(251, 191, 36, 0.2);
+        border-color: rgba(251, 191, 36, 0.2);
     }
-    
-    .btn-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.6rem;
-    }
-    .btn-map {
-        background: var(--accent-blue);
-        color: white !important;
-        padding: 0.4rem 1.2rem;
-        border-radius: 40px;
-        font-size: 0.85rem;
-        font-weight: 500;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s;
-        border: none;
-        cursor: pointer;
-    }
-    .btn-map:hover {
-        background: var(--accent-blue-hover);
-        color: white !important;
-        transform: scale(1.02);
-        box-shadow: 0 4px 15px rgba(79, 140, 247, 0.3);
-    }
-    .btn-call {
-        background: var(--accent-green);
-        color: #0a0a0f !important;
-        padding: 0.4rem 1.2rem;
-        border-radius: 40px;
-        font-size: 0.85rem;
-        font-weight: 500;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s;
-        border: none;
-        cursor: pointer;
-    }
-    .btn-call:hover {
-        background: var(--accent-green-hover);
-        color: #0a0a0f !important;
-        transform: scale(1.02);
-        box-shadow: 0 4px 15px rgba(52, 211, 153, 0.3);
-    }
-    
-    .btn-back {
-        background: var(--bg-card);
-        color: var(--text-primary) !important;
-        padding: 0.5rem 1.5rem;
-        border-radius: 40px;
-        font-size: 0.9rem;
-        font-weight: 500;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        transition: all 0.2s;
-        border: 1px solid var(--border-color);
-        cursor: pointer;
-    }
-    .btn-back:hover {
-        background: var(--bg-card-hover);
-        border-color: var(--accent-blue);
-        transform: translateX(-3px);
-    }
-    
-    .detail-grid {
+
+    .site-details {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 0.5rem 1.5rem;
-        margin-top: 0.5rem;
-        font-size: 0.9rem;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.3rem 1rem;
+        margin: 0.5rem 0;
+        font-size: 0.8rem;
     }
+
     .detail-item {
         display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        gap: 0.2rem;
+        flex-direction: column;
+        gap: 0.05rem;
     }
+
     .detail-label {
         color: var(--text-muted);
-        font-weight: 400;
-        min-width: 80px;
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
+
     .detail-value {
+        color: var(--text-secondary);
         font-weight: 500;
-        color: var(--text-primary);
+        font-size: 0.8rem;
+        word-break: break-word;
     }
-    
-    .stats-container {
-        background: var(--bg-secondary);
-        border-radius: 12px;
-        padding: 1rem 1.5rem;
-        margin: 1rem 0;
-        border: 1px solid var(--border-color);
+
+    .site-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 2rem;
-    }
-    .stat-item {
-        display: flex;
-        align-items: baseline;
         gap: 0.5rem;
+        margin-top: 0.7rem;
     }
-    .stat-number {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--text-primary);
-    }
-    .stat-label {
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-    }
-    
-    .search-highlight {
-        background: var(--highlight-yellow);
-        color: #0a0a0f;
-        padding: 0.1rem 0.3rem;
-        border-radius: 4px;
+
+    .action-btn {
+        flex: 1;
+        min-width: 100px;
+        padding: 0.5rem 0.8rem;
+        border-radius: 40px;
+        border: none;
+        font-size: 0.75rem;
         font-weight: 600;
-    }
-    
-    /* Search container */
-    .search-container {
-        background: var(--bg-secondary);
-        border-radius: 12px;
-        padding: 1.5rem;
-        border: 1px solid var(--border-color);
-        margin: 1rem 0;
-    }
-    
-    /* Welcome message */
-    .welcome-container {
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
         text-align: center;
-        padding: 3rem 1rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+    }
+
+    .action-btn:active {
+        transform: scale(0.95);
+    }
+
+    .btn-map {
+        background: var(--accent-blue);
+        color: white;
+    }
+
+    .btn-map:hover {
+        background: var(--accent-blue-hover);
+        color: white;
+    }
+
+    .btn-call {
+        background: var(--accent-green);
+        color: #0a0a0f;
+    }
+
+    .btn-call:hover {
+        background: var(--accent-green-hover);
+        color: #0a0a0f;
+    }
+
+    .btn-disabled {
+        background: var(--bg-card);
+        color: var(--text-muted);
+        border: 1px solid var(--border-color);
+        cursor: not-allowed;
+    }
+
+    /* ========================================
+       WELCOME SCREEN
+       ======================================== */
+    .welcome-screen {
+        text-align: center;
+        padding: 2rem 1rem;
         background: var(--bg-secondary);
         border-radius: 16px;
         border: 1px solid var(--border-color);
-        margin: 2rem 0;
+        margin: 1rem 0;
     }
+
     .welcome-icon {
-        font-size: 4rem;
-        margin-bottom: 1rem;
+        font-size: 3.5rem;
+        margin-bottom: 0.8rem;
     }
+
     .welcome-title {
-        font-size: 1.8rem;
+        font-size: 1.4rem;
         font-weight: 700;
         color: var(--text-primary);
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.3rem;
     }
+
     .welcome-subtitle {
         color: var(--text-secondary);
-        font-size: 1.1rem;
-        max-width: 600px;
+        font-size: 0.9rem;
+        max-width: 400px;
         margin: 0 auto;
-        line-height: 1.6;
+        line-height: 1.5;
     }
+
     .welcome-hint {
         color: var(--text-muted);
-        font-size: 0.9rem;
-        margin-top: 1.5rem;
-        padding: 1rem;
+        font-size: 0.8rem;
+        margin-top: 1.2rem;
+        padding: 0.8rem;
         background: var(--bg-card);
         border-radius: 8px;
         border: 1px dashed var(--border-color);
         display: inline-block;
     }
-    
-    /* Navigation buttons */
-    .nav-container {
+
+    /* ========================================
+       BOTTOM NAVIGATION - MOBILE APP STYLE
+       ======================================== */
+    .bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
         display: flex;
-        justify-content: flex-end;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
+        justify-content: space-around;
+        padding: 0.4rem 0.5rem calc(0.4rem + var(--safe-bottom, 0px));
+        z-index: 1000;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
     }
-    
-    /* Headers */
-    h1, h2, h3, h4 {
-        color: var(--text-primary) !important;
+
+    .nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.1rem;
+        padding: 0.3rem 0.8rem;
+        border-radius: 12px;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: 0.55rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        min-width: 50px;
     }
-    
-    /* Input fields */
-    .stTextInput > div > div > input {
-        background: var(--bg-input) !important;
-        border: 1px solid var(--border-color) !important;
-        color: var(--text-primary) !important;
-        border-radius: 8px !important;
-        font-size: 1rem !important;
-        padding: 0.75rem 1rem !important;
+
+    .nav-item .nav-icon {
+        font-size: 1.2rem;
     }
-    .stTextInput > div > div > input:focus {
-        border-color: var(--accent-blue) !important;
-        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.1) !important;
+
+    .nav-item.active {
+        color: var(--accent-blue);
     }
-    .stTextInput > div > div > input::placeholder {
-        color: var(--text-muted) !important;
+
+    .nav-item:active {
+        transform: scale(0.9);
     }
-    
-    /* Select boxes */
-    .stSelectbox > div > div {
-        background: var(--bg-input) !important;
-        border: 1px solid var(--border-color) !important;
-        color: var(--text-primary) !important;
-    }
-    
-    /* Checkbox */
-    .stCheckbox > label {
-        color: var(--text-secondary) !important;
-    }
-    
-    /* Dataframe */
-    .stDataFrame {
-        border: 1px solid var(--border-color) !important;
-        border-radius: 12px !important;
-        overflow: hidden !important;
-    }
-    .stDataFrame > div {
-        background: var(--bg-secondary) !important;
-    }
-    
-    /* Buttons */
-    .stButton > button {
-        background: var(--bg-card) !important;
-        border: 1px solid var(--border-color) !important;
-        color: var(--text-primary) !important;
-        border-radius: 8px !important;
-        transition: all 0.2s !important;
-        padding: 0.5rem 1rem !important;
-        font-weight: 500 !important;
-    }
-    .stButton > button:hover {
-        background: var(--bg-card-hover) !important;
-        border-color: var(--accent-blue) !important;
-        color: var(--text-primary) !important;
-        transform: translateY(-1px);
-    }
-    
-    /* Download buttons */
-    .stDownloadButton > button {
-        background: var(--bg-card) !important;
-        border: 1px solid var(--border-color) !important;
-        color: var(--text-primary) !important;
-        border-radius: 8px !important;
-        transition: all 0.2s !important;
-    }
-    .stDownloadButton > button:hover {
-        background: var(--bg-card-hover) !important;
-        border-color: var(--accent-blue) !important;
-    }
-    
-    /* Expander */
-    .streamlit-expanderHeader {
-        background: var(--bg-secondary) !important;
-        border-color: var(--border-color) !important;
-        color: var(--text-primary) !important;
-    }
-    .streamlit-expanderContent {
-        background: var(--bg-secondary) !important;
-        border-color: var(--border-color) !important;
-    }
-    
-    /* Info/Warning/Success messages */
-    .stAlert {
-        background: var(--bg-card) !important;
-        border-color: var(--border-color) !important;
-        color: var(--text-primary) !important;
-    }
-    
-    /* Plotly charts */
-    .js-plotly-plot .plotly .main-svg {
-        background: var(--bg-secondary) !important;
-    }
-    
-    /* Footer */
-    hr {
-        border-color: var(--border-color) !important;
-    }
-    
-    /* About page specific */
-    .about-back-container {
-        margin-bottom: 1.5rem;
-    }
-    
-    /* mobile adjustments */
-    @media (max-width: 640px) {
+
+    /* ========================================
+       WEB APP - DESKTOP ENHANCEMENTS
+       ======================================== */
+    @media (min-width: 769px) {
+        .main .block-container {
+            padding: 1rem 2rem 6rem 2rem;
+            max-width: 1200px !important;
+            margin: 0 auto;
+        }
+
+        .app-header {
+            padding: 0.8rem 2rem;
+            margin: -0.5rem -2rem 1.5rem -2rem;
+        }
+
+        .app-logo-text {
+            font-size: 1.3rem;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+        }
+
+        .stat-card {
+            padding: 1.2rem;
+        }
+
         .site-card {
-            padding: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
         }
-        .btn-group {
-            flex-direction: column;
-            align-items: stretch;
+
+        .site-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent-purple);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px var(--shadow-color);
         }
-        .btn-map, .btn-call {
-            justify-content: center;
+
+        .site-name {
+            font-size: 1.2rem;
         }
-        .detail-grid {
-            grid-template-columns: 1fr;
+
+        .site-details {
+            grid-template-columns: repeat(3, 1fr);
         }
-        .stats-container {
-            flex-direction: column;
-            gap: 0.5rem;
+
+        .site-actions {
+            gap: 0.8rem;
+        }
+
+        .action-btn {
+            flex: 0 1 auto;
+            min-width: 140px;
+            padding: 0.6rem 1.2rem;
+            font-size: 0.85rem;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-map:hover {
+            box-shadow: 0 4px 15px rgba(79, 140, 247, 0.3);
+        }
+
+        .btn-call:hover {
+            box-shadow: 0 4px 15px rgba(52, 211, 153, 0.3);
+        }
+
+        .welcome-screen {
+            padding: 4rem 2rem;
+        }
+
+        .welcome-icon {
+            font-size: 5rem;
         }
         .welcome-title {
-            font-size: 1.4rem;
+            font-size: 2rem;
         }
-        .nav-container {
-            flex-direction: column;
-            align-items: stretch;
+        .welcome-subtitle {
+            font-size: 1.1rem;
         }
+
+        .bottom-nav {
+            display: none;
+        }
+
+        .search-section {
+            padding: 1.5rem;
+        }
+
+        .search-input-wrapper input {
+            padding: 0.8rem 0.8rem 0.8rem 3rem;
+            font-size: 1rem;
+        }
+
+        .search-btn, .clear-btn {
+            padding: 0.8rem 1.5rem;
+            font-size: 0.95rem;
+            min-width: 80px;
+        }
+    }
+
+    /* ========================================
+       TABLET OPTIMIZATION
+       ======================================== */
+    @media (min-width: 481px) and (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .site-details {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .bottom-nav .nav-item {
+            font-size: 0.6rem;
+        }
+        .bottom-nav .nav-item .nav-icon {
+            font-size: 1.3rem;
+        }
+    }
+
+    /* ========================================
+       SMALL PHONE OPTIMIZATION
+       ======================================== */
+    @media (max-width: 380px) {
+        .app-logo-text {
+            font-size: 0.9rem;
+        }
+        .app-logo-badge {
+            font-size: 0.5rem;
+            padding: 0.1rem 0.4rem;
+        }
+        .nav-btn {
+            font-size: 0.65rem;
+            padding: 0.3rem 0.6rem;
+        }
+        .search-btn, .clear-btn {
+            font-size: 0.7rem;
+            padding: 0.6rem 0.7rem;
+            min-width: 50px;
+        }
+        .site-name {
+            font-size: 0.9rem;
+        }
+        .site-details {
+            grid-template-columns: 1fr 1fr;
+        }
+        .action-btn {
+            min-width: 70px;
+            font-size: 0.65rem;
+            padding: 0.4rem 0.6rem;
+        }
+    }
+
+    /* ========================================
+       SEARCH HIGHLIGHT
+       ======================================== */
+    .search-highlight {
+        background: var(--highlight-yellow);
+        color: #0a0a0f;
+        padding: 0.05rem 0.2rem;
+        border-radius: 3px;
+        font-weight: 600;
+    }
+
+    /* ========================================
+       LOADING / EMPTY STATES
+       ======================================== */
+    .empty-state {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: var(--text-muted);
+    }
+
+    .empty-state .empty-icon {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -470,7 +742,6 @@ if 'search_results' not in st.session_state:
 def load_excel_data():
     """Load data from Excel file (database.xlsx)"""
     try:
-        # Try multiple possible locations
         possible_paths = [
             "data/database.xlsx",
             "database.xlsx",
@@ -496,13 +767,9 @@ def load_excel_data():
             """)
             return None
         
-        # Read the Excel file
         df = pd.read_excel(file_path, engine='openpyxl')
-        
-        # Clean column names
         df.columns = df.columns.str.strip().str.upper()
         
-        # Check if we have data
         if df.empty:
             st.error("❌ The database file is empty!")
             return None
@@ -514,13 +781,11 @@ def load_excel_data():
         return None
 
 def safe_str(val):
-    """Convert value to string safely"""
     if pd.isna(val):
         return ""
     return str(val)
 
 def highlight_text(text, search_term):
-    """Highlight search term in text"""
     if not search_term or not text:
         return text
     try:
@@ -529,8 +794,8 @@ def highlight_text(text, search_term):
     except:
         return text
 
-def create_site_card(row, search_term=""):
-    """Create HTML for a site card with search highlighting"""
+def create_site_card_html(row, search_term=""):
+    """Create HTML for a site card optimized for mobile"""
     plaid = safe_str(row.get("PLAID", ""))
     site = safe_str(row.get("SITE", ""))
     region = safe_str(row.get("REGION", ""))
@@ -547,60 +812,70 @@ def create_site_card(row, search_term=""):
     fo_onsite = safe_str(row.get("NEW ENGINEER_ANM1", ""))
     contact = safe_str(row.get("CONTACT NUMBER", ""))
     
-    # Highlight search terms
+    # Highlight
     site_display = highlight_text(site, search_term)
     plaid_display = highlight_text(plaid, search_term)
-    region_display = highlight_text(region, search_term)
-    province_display = highlight_text(province, search_term)
-    municipality_display = highlight_text(municipality, search_term)
-    barangay_display = highlight_text(barangay, search_term)
-    site_add_display = highlight_text(site_add, search_term)
-    
-    html = f"""
-    <div class="site-card">
-        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start;">
-            <div>
-                <div class="site-title">{site_display} <span class="badge-plaid">{plaid_display}</span></div>
-                <div class="site-sub">{region_display} · {province_display} · {municipality_display} · {barangay_display}</div>
-            </div>
-            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.2rem;">
-                <span class="badge-territory">{territory}</span>
-                <span class="badge-towerco">{towerco}</span>
-            </div>
-        </div>
-        <div class="detail-grid">
-            <div class="detail-item"><span class="detail-label">Address</span><span class="detail-value">{site_add_display}</span></div>
-            <div class="detail-item"><span class="detail-label">Assigned Hub</span><span class="detail-value">{assigned_hub}</span></div>
-            <div class="detail-item"><span class="detail-label">New Assign Hub</span><span class="detail-value">{new_assign_hub}</span></div>
-            <div class="detail-item"><span class="detail-label">FO Onsite</span><span class="detail-value">{fo_onsite}</span></div>
-            <div class="detail-item"><span class="detail-label">Lat/Lon</span><span class="detail-value">{lat}, {lon}</span></div>
-        </div>
-        <div class="btn-group">
-    """
     
     # Map button
+    map_button = ''
     if lat and lon:
         try:
-            float(lat)
-            float(lon)
+            float(lat); float(lon)
             maps_url = f"https://www.google.com/maps?q={lat},{lon}"
-            html += f'<a href="{maps_url}" target="_blank" class="btn-map"><span>🗺️</span> Navigate to Google Maps</a>'
+            map_button = f'<a href="{maps_url}" target="_blank" class="action-btn btn-map">🗺️ Navigate</a>'
         except:
-            html += '<span style="background:#2a2a44; color:#6b6b85; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">⚠️ invalid coordinates</span>'
+            map_button = '<span class="action-btn btn-disabled">⚠️ Invalid</span>'
     else:
-        html += '<span style="background:#2a2a44; color:#6b6b85; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">⚠️ no coordinates</span>'
+        map_button = '<span class="action-btn btn-disabled">⚠️ No coords</span>'
     
     # Call button
+    call_button = ''
     if contact:
         clean_contact = ''.join(ch for ch in contact if ch.isdigit() or ch == '+')
         if clean_contact:
-            html += f'<a href="tel:{clean_contact}" class="btn-call"><span>📞</span> Call FO: {contact}</a>'
+            call_button = f'<a href="tel:{clean_contact}" class="action-btn btn-call">📞 Call FO</a>'
         else:
-            html += f'<span style="background:#2a2a44; color:#6b6b85; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">📞 {contact}</span>'
+            call_button = f'<span class="action-btn btn-disabled">📞 {contact}</span>'
     else:
-        html += '<span style="background:#2a2a44; color:#6b6b85; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">📞 no contact</span>'
+        call_button = '<span class="action-btn btn-disabled">📞 No contact</span>'
     
-    html += "</div></div>"
+    html = f"""
+    <div class="site-card">
+        <div class="site-header">
+            <div>
+                <span class="site-name">{site_display}</span>
+                <span class="site-plaid">{plaid_display}</span>
+            </div>
+        </div>
+        <div class="site-location">{region} · {province} · {municipality} · {barangay}</div>
+        <div class="site-tags">
+            <span class="tag tag-territory">{territory}</span>
+            <span class="tag tag-towerco">{towerco}</span>
+        </div>
+        <div class="site-details">
+            <div class="detail-item">
+                <span class="detail-label">Address</span>
+                <span class="detail-value">{site_add}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">FO Onsite</span>
+                <span class="detail-value">{fo_onsite}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Assigned Hub</span>
+                <span class="detail-value">{assigned_hub}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">New Assign Hub</span>
+                <span class="detail-value">{new_assign_hub}</span>
+            </div>
+        </div>
+        <div class="site-actions">
+            {map_button}
+            {call_button}
+        </div>
+    </div>
+    """
     return html
 
 def create_map(df, selected_indices=None):
@@ -612,7 +887,6 @@ def create_map(df, selected_indices=None):
     
     fig = go.Figure()
     
-    # All sites
     fig.add_trace(go.Scattermapbox(
         lat=map_df['LATITUDE'],
         lon=map_df['LONGITUDE'],
@@ -628,7 +902,6 @@ def create_map(df, selected_indices=None):
         showlegend=False
     ))
     
-    # Selected sites
     if selected_indices:
         selected_df = map_df.iloc[selected_indices]
         fig.add_trace(go.Scattermapbox(
@@ -646,7 +919,6 @@ def create_map(df, selected_indices=None):
             showlegend=False
         ))
         
-        # Add connecting lines between selected sites
         if len(selected_df) > 1:
             for i in range(len(selected_df) - 1):
                 fig.add_trace(go.Scattermapbox(
@@ -658,7 +930,6 @@ def create_map(df, selected_indices=None):
                     hoverinfo='skip'
                 ))
     
-    # Configure map layout with dark theme
     fig.update_layout(
         mapbox=dict(
             style='dark',
@@ -668,7 +939,7 @@ def create_map(df, selected_indices=None):
             ),
             zoom=8
         ),
-        height=500,
+        height=400,
         margin=dict(l=0, r=0, t=0, b=0),
         hovermode='closest',
         paper_bgcolor='rgba(0,0,0,0)',
@@ -687,11 +958,9 @@ def create_pdf_export(df, selected_indices):
         from reportlab.lib.units import inch
         import tempfile
         
-        # Create temporary file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
         temp_file.close()
         
-        # Create PDF document
         doc = SimpleDocTemplate(
             temp_file.name,
             pagesize=landscape(letter),
@@ -701,7 +970,6 @@ def create_pdf_export(df, selected_indices):
             bottomMargin=72,
         )
         
-        # Prepare styles
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
             'CustomTitle',
@@ -721,19 +989,13 @@ def create_pdf_export(df, selected_indices):
             spaceAfter=20
         )
         
-        # Build content
         content = []
-        
-        # Title
         content.append(Paragraph("📍 GPS Extractor - Site Report", title_style))
         content.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", subtitle_style))
         content.append(Spacer(1, 20))
-        
-        # Statistics
         content.append(Paragraph(f"<b>Total Sites:</b> {len(selected_indices)}", styles['Normal']))
         content.append(Spacer(1, 10))
         
-        # Table data
         selected_df = df.iloc[selected_indices]
         table_data = [['PLAID', 'Site', 'Region', 'FO Onsite', 'Contact', 'Latitude', 'Longitude']]
         
@@ -757,7 +1019,6 @@ def create_pdf_export(df, selected_indices):
                 lon_val
             ])
         
-        # Create table
         table = Table(table_data, colWidths=[0.8*inch, 1.2*inch, 1*inch, 1.2*inch, 1.2*inch, 1*inch, 1*inch])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
@@ -777,17 +1038,12 @@ def create_pdf_export(df, selected_indices):
         ]))
         
         content.append(table)
-        
-        # Build PDF
         doc.build(content)
         
-        # Read the file
         with open(temp_file.name, 'rb') as f:
             pdf_data = f.read()
         
-        # Clean up
         os.unlink(temp_file.name)
-        
         return pdf_data
         
     except ImportError:
@@ -798,206 +1054,124 @@ def create_pdf_export(df, selected_indices):
         return None
 
 # ------------------------------
-# NAVIGATION COMPONENT
+# APP HEADER
 # ------------------------------
-def navigation_buttons():
-    """Display navigation buttons in the top right"""
-    col1, col2, col3 = st.columns([4, 1, 1])
-    with col2:
-        if st.button("🏠 Home", use_container_width=True):
-            st.session_state.page = 'main'
-            st.session_state.has_searched = False
-            st.session_state.search_results = None
-            st.rerun()
-    with col3:
-        if st.button("ℹ️ About", use_container_width=True):
-            st.session_state.page = 'about'
-            st.rerun()
+def app_header():
+    st.markdown("""
+    <div class="app-header">
+        <div class="app-header-content">
+            <div class="app-logo">
+                <span class="app-logo-icon">📍</span>
+                <span class="app-logo-text">GPS Extractor</span>
+                <span class="app-logo-badge">FO Engr</span>
+            </div>
+            <div class="app-nav">
+                <button class="nav-btn active" onclick="location.href='/'">🏠 Home</button>
+                <button class="nav-btn" onclick="location.href='?page=about'">ℹ️ About</button>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ------------------------------
+# BOTTOM NAVIGATION (Mobile)
+# ------------------------------
+def bottom_nav():
+    current_page = st.session_state.page
+    home_active = 'active' if current_page == 'main' else ''
+    about_active = 'active' if current_page == 'about' else ''
+    
+    st.markdown(f"""
+    <div class="bottom-nav">
+        <button class="nav-item {home_active}" onclick="location.href='/'">
+            <span class="nav-icon">🏠</span>
+            Home
+        </button>
+        <button class="nav-item {about_active}" onclick="location.href='?page=about'">
+            <span class="nav-icon">ℹ️</span>
+            About
+        </button>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ------------------------------
 # ABOUT PAGE
 # ------------------------------
 def show_about():
-    # Back button at top
-    st.markdown('<div class="about-back-container">', unsafe_allow_html=True)
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        if st.button("← Back", use_container_width=True):
-            st.session_state.page = 'main'
-            st.rerun()
-    with col2:
-        st.markdown("")  # Spacer
-    st.markdown('</div>', unsafe_allow_html=True)
+    app_header()
     
     st.markdown("""
-    <div style="text-align: center; padding: 1rem 0 2rem 0;">
-        <h1 style="font-size: 2.5rem; font-weight: 700; color: #e8e8f0;">📍 GPS Extractor</h1>
-        <p style="font-size: 1.2rem; color: #a0a0b8; margin-top: 0.5rem;">Globe FO Engineer Contact Management System</p>
+    <div style="text-align: center; padding: 1rem 0 1.5rem 0;">
+        <h1 style="font-size: 1.8rem; font-weight: 700; color: #e8e8f0;">📍 GPS Extractor</h1>
+        <p style="font-size: 0.95rem; color: #a0a0b8;">Globe FO Engineer Contact Management</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Developer Info
     st.markdown("""
     <div style="background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%); 
-                border-radius: 16px; padding: 2rem; border: 1px solid #2a2a44; margin: 1rem 0;">
+                border-radius: 16px; padding: 1.5rem; border: 1px solid #2a2a44; margin: 0.5rem 0;">
         <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
             <div style="flex: 1;">
-                <h2 style="color: #e8e8f0; margin: 0;">👨‍💻 Developer</h2>
-                <h3 style="color: #a0a0b8; margin: 0.5rem 0;">Engr. John Carlo Rabanes, ECE</h3>
-                <p style="margin: 0.3rem 0; color: #6b6b85;">📧 rabanes.johncarlo4@gmail.com</p>
-                <p style="margin: 0.3rem 0; color: #6b6b85;">🏢 Nokia Shanghai Bell</p>
+                <h2 style="color: #e8e8f0; margin: 0; font-size: 1.2rem;">👨‍💻 Developer</h2>
+                <h3 style="color: #a0a0b8; margin: 0.3rem 0; font-size: 1rem;">Engr. John Carlo Rabanes, ECE</h3>
+                <p style="margin: 0.2rem 0; color: #6b6b85; font-size: 0.85rem;">📧 rabanes.johncarlo4@gmail.com</p>
+                <p style="margin: 0.2rem 0; color: #6b6b85; font-size: 0.85rem;">🏢 Nokia Shanghai Bell</p>
             </div>
-            <div style="font-size: 4rem;">📡</div>
+            <div style="font-size: 3rem;">📡</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Mission & Vision
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        <div style="background: #14141e; border-radius: 12px; padding: 1.5rem; height: 100%; border: 1px solid #2a2a44;">
-            <h3 style="color: #4f8cf7;">🎯 Mission</h3>
-            <p style="color: #a0a0b8; line-height: 1.6;">
+        <div style="background: #14141e; border-radius: 12px; padding: 1rem; height: 100%; border: 1px solid #2a2a44;">
+            <h3 style="color: #4f8cf7; font-size: 1rem;">🎯 Mission</h3>
+            <p style="color: #a0a0b8; font-size: 0.85rem; line-height: 1.5;">
                 To empower field operations engineers with seamless access to site information, 
-                enabling efficient navigation and communication for faster response times and 
-                improved network reliability across the Philippines.
+                enabling efficient navigation and communication for faster response times.
             </p>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown("""
-        <div style="background: #14141e; border-radius: 12px; padding: 1.5rem; height: 100%; border: 1px solid #2a2a44;">
-            <h3 style="color: #fbbf24;">👁️ Vision</h3>
-            <p style="color: #a0a0b8; line-height: 1.6;">
+        <div style="background: #14141e; border-radius: 12px; padding: 1rem; height: 100%; border: 1px solid #2a2a44;">
+            <h3 style="color: #fbbf24; font-size: 1rem;">👁️ Vision</h3>
+            <p style="color: #a0a0b8; font-size: 0.85rem; line-height: 1.5;">
                 To be the leading digital tool for telecommunications field operations, 
-                setting the standard for efficiency, accuracy, and user experience in 
-                site management and engineer coordination.
+                setting the standard for efficiency and user experience.
             </p>
         </div>
         """, unsafe_allow_html=True)
     
-    # Features Comparison
     st.markdown("---")
-    st.subheader("⚡ Features & Comparison")
+    st.subheader("⚡ Features")
     
-    comparison_data = {
-        "Feature": [
-            "📍 GPS Navigation",
-            "📞 Click-to-Call",
-            "🔍 Search by PLAID/Site",
-            "📊 Data Visualization",
-            "📱 Mobile Friendly",
-            "🗺️ Map Visualization",
-            "📄 PDF Export",
-            "🔍 Smart Filtering",
-            "⚡ Speed",
-            "💰 Cost"
-        ],
-        "GPS Extractor": [
-            "✅ One-click Google Maps",
-            "✅ Direct contact dialing",
-            "✅ Instant search results",
-            "✅ Interactive charts",
-            "✅ Fully responsive",
-            "✅ Interactive maps",
-            "✅ Multiple sites export",
-            "✅ Multi-filter system",
-            "🚀 Instant",
-            "💵 Free (Open Source)"
-        ],
-        "Traditional Methods": [
-            "❌ Manual copy-paste",
-            "❌ Manual dialing",
-            "❌ Manual CTRL+F search",
-            "❌ Static spreadsheets",
-            "❌ Desktop-only",
-            "❌ No visualization",
-            "❌ Manual screenshots",
-            "❌ Limited filtering",
-            "🐢 Slow",
-            "💰 Expensive tools"
-        ]
-    }
+    features = [
+        ("📍 GPS Navigation", "One-click Google Maps"),
+        ("📞 Click-to-Call", "Direct contact dialing"),
+        ("🔍 Search", "By PLAID or Site Name"),
+        ("🗺️ Map View", "Interactive site visualization"),
+        ("📄 PDF Export", "Multiple sites export"),
+        ("📱 Mobile Ready", "Fully responsive design"),
+    ]
     
-    comparison_df = pd.DataFrame(comparison_data)
-    st.dataframe(
-        comparison_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Feature": st.column_config.TextColumn("Feature", width="small"),
-            "GPS Extractor": st.column_config.TextColumn("GPS Extractor", width="medium"),
-            "Traditional Methods": st.column_config.TextColumn("Traditional Methods", width="medium"),
-        }
-    )
-    
-    # Advantages & Disadvantages
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        <div style="background: rgba(52, 211, 153, 0.1); border-left: 4px solid #34d399; border-radius: 8px; padding: 1.5rem;">
-            <h3 style="color: #34d399; margin-top: 0;">✅ Advantages</h3>
-            <ul style="color: #a0a0b8; line-height: 2;">
-                <li>🚀 Instant access to site data</li>
-                <li>🗺️ Seamless Google Maps integration</li>
-                <li>📞 Direct engineer contact</li>
-                <li>🔍 Quick search by PLAID or Site Name</li>
-                <li>📊 Visual data representation</li>
-                <li>📱 Accessible anywhere, anytime</li>
-                <li>💾 Built-in data export</li>
-                <li>🔄 Real-time filtering</li>
-                <li>💰 Zero licensing costs</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 8px; padding: 1.5rem;">
-            <h3 style="color: #ef4444; margin-top: 0;">⚠️ Disadvantages</h3>
-            <ul style="color: #a0a0b8; line-height: 2;">
-                <li>🌐 Requires internet connection</li>
-                <li>📊 Data format dependent</li>
-                <li>🔧 Excel file management needed</li>
-                <li>🖥️ Initial setup required</li>
-                <li>📈 Performance on large datasets</li>
-                <li>🔒 No built-in authentication</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+    for icon, name in features:
+        st.markdown(f"**{icon} {name}**")
     
     st.markdown("---")
-    st.caption("© 2026 GPS Extractor | Developed for Globe Telecom Operations")
+    st.caption("© 2026 GPS Extractor | Developed for Globe Telecom")
     
-    # Back button at bottom
-    st.markdown('<div style="text-align: center; margin-top: 2rem;">', unsafe_allow_html=True)
-    if st.button("← Back to Home", use_container_width=False):
-        st.session_state.page = 'main'
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    bottom_nav()
 
 # ------------------------------
 # MAIN PAGE
 # ------------------------------
 def show_main():
-    # Navigation
-    navigation_buttons()
+    app_header()
     
-    # Title
-    st.markdown("""
-        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-            <span style="font-size: 2rem;">📍</span>
-            <h1 style="display: inline-block; margin: 0; font-weight: 600; color: #e8e8f0;">GPS Extractor</h1>
-            <span style="background: rgba(79, 140, 247, 0.2); color: #4f8cf7; padding: 0.2rem 1rem; border-radius: 40px; font-size: 0.8rem; font-weight: 500; margin-left: 0.5rem; border: 1px solid rgba(79, 140, 247, 0.2);">Globe FO Engr</span>
-        </div>
-        <p style="color: #a0a0b8; margin-top: -0.2rem; font-size: 1rem;">
-            📊 Search <strong style="color: #e8e8f0;">database.xlsx</strong> · Click on any map button to navigate in Google Maps · Click to call FO directly.
-        </p>
-    """, unsafe_allow_html=True)
-    
-    # Load data (but don't display yet)
+    # Load data
     if st.session_state.df is None:
         df = load_excel_data()
         if df is not None:
@@ -1007,39 +1181,38 @@ def show_main():
     
     if df is None or df.empty:
         st.warning("⚠️ No data available. Please check the database file.")
+        bottom_nav()
         return
     
-    # ------------------------------
-    # SEARCH SECTION (Always visible)
-    # ------------------------------
-    st.markdown("---")
-    st.subheader("🔍 Search Sites")
+    # Search Section
+    st.markdown('<div class="search-section">', unsafe_allow_html=True)
+    st.markdown('<div class="search-bar">', unsafe_allow_html=True)
     
     col1, col2 = st.columns([3, 1])
     with col1:
         search_term = st.text_input(
-            "Search by PLAID or Site Name",
+            "Search",
             value=st.session_state.search_term,
-            placeholder="Enter PLAID or Site Name (e.g., SITE001 or Alpha)",
-            help="Search will look for matches in both PLAID and Site Name columns",
+            placeholder="🔍 Search PLAID or Site Name...",
             label_visibility="collapsed"
         )
     with col2:
-        search_button = st.button("🔍 Search", use_container_width=True)
-        clear_button = st.button("✖️ Clear", use_container_width=True)
+        search_btn = st.button("🔍", use_container_width=True)
+        clear_btn = st.button("✖", use_container_width=True)
     
-    if clear_button:
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    if clear_btn:
         st.session_state.search_term = ''
         st.session_state.has_searched = False
         st.session_state.search_results = None
         st.rerun()
     
-    # Perform search when button is clicked
-    if search_button and search_term:
+    if search_btn and search_term:
         st.session_state.search_term = search_term
         st.session_state.has_searched = True
         
-        # Search in PLAID and SITE columns (case-insensitive)
         mask = pd.Series([False] * len(df))
         if 'PLAID' in df.columns:
             mask |= df['PLAID'].astype(str).str.contains(search_term, case=False, na=False)
@@ -1048,226 +1221,157 @@ def show_main():
         
         st.session_state.search_results = df[mask].copy()
     
-    # ------------------------------
-    # DISPLAY RESULTS (only if searched)
-    # ------------------------------
+    # Display Results or Welcome
     if st.session_state.has_searched:
         filtered_df = st.session_state.search_results
         
         if filtered_df is None or len(filtered_df) == 0:
-            st.warning(f"No sites found matching '{st.session_state.search_term}'")
-            # Show empty state with search hint
             st.markdown("""
-            <div class="welcome-container" style="padding: 2rem;">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+            <div class="welcome-screen">
+                <div class="welcome-icon">🔍</div>
                 <div class="welcome-title">No Results Found</div>
-                <div class="welcome-subtitle">
-                    Try searching with a different PLAID or Site Name.
-                </div>
-                <div class="welcome-hint">
-                    💡 Tip: Search is case-insensitive and matches partial terms
-                </div>
+                <div class="welcome-subtitle">Try searching with a different PLAID or Site Name.</div>
+                <div class="welcome-hint">💡 Search is case-insensitive and matches partial terms</div>
             </div>
             """, unsafe_allow_html=True)
+            bottom_nav()
             return
         
-        # Show search results count
-        st.markdown(f"**Found {len(filtered_df)} site(s)** matching '{st.session_state.search_term}'")
-        
-        # Statistics for search results
+        # Stats
         stats = {
-            'total_sites': len(filtered_df),
-            'total_regions': filtered_df['REGION'].nunique() if 'REGION' in filtered_df.columns else 0,
-            'with_coords': filtered_df['LATITUDE'].notna().sum() if 'LATITUDE' in filtered_df.columns else 0,
-            'with_contact': filtered_df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in filtered_df.columns else 0,
+            'total': len(filtered_df),
+            'regions': filtered_df['REGION'].nunique() if 'REGION' in filtered_df.columns else 0,
+            'coords': filtered_df['LATITUDE'].notna().sum() if 'LATITUDE' in filtered_df.columns else 0,
+            'contacts': filtered_df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in filtered_df.columns else 0,
         }
         
         st.markdown(f"""
-        <div class="stats-container">
-            <div class="stat-item">
-                <span class="stat-number">{stats['total_sites']}</span>
-                <span class="stat-label">Results Found</span>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-number">{stats['total']}</span>
+                <span class="stat-label">Results</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-number">{stats['total_regions']}</span>
+            <div class="stat-card">
+                <span class="stat-number">{stats['regions']}</span>
                 <span class="stat-label">Regions</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-number">{stats['with_coords']}</span>
-                <span class="stat-label">With Coordinates</span>
+            <div class="stat-card">
+                <span class="stat-number">{stats['coords']}</span>
+                <span class="stat-label">With Coords</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-number">{stats['with_contact']}</span>
+            <div class="stat-card">
+                <span class="stat-number">{stats['contacts']}</span>
                 <span class="stat-label">With Contact</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # ------------------------------
-        # FILTERS (for search results)
-        # ------------------------------
-        col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
-        
+        # Filters
+        col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
             if 'REGION' in filtered_df.columns:
                 regions = ['All'] + sorted(filtered_df['REGION'].dropna().unique().tolist())
-                selected_region = st.selectbox('Filter by Region', regions)
+                selected_region = st.selectbox('Region', regions)
                 if selected_region != 'All':
                     filtered_df = filtered_df[filtered_df['REGION'] == selected_region]
-        
         with col2:
             if 'TOWERCO' in filtered_df.columns:
                 towercos = ['All'] + sorted(filtered_df['TOWERCO'].dropna().unique().tolist())
-                selected_towerco = st.selectbox('Filter by TowerCo', towercos)
+                selected_towerco = st.selectbox('TowerCo', towercos)
                 if selected_towerco != 'All':
                     filtered_df = filtered_df[filtered_df['TOWERCO'] == selected_towerco]
-        
         with col3:
-            show_with_coords = st.checkbox('Only with coords', value=False)
-            if show_with_coords:
-                filtered_df = filtered_df[filtered_df['LATITUDE'].notna() & filtered_df['LONGITUDE'].notna()]
+            show_map = st.checkbox('🗺️ Map')
         
-        with col4:
-            show_map = st.checkbox('Show Map View', value=False)
-        
-        # Update count after filters
-        if len(filtered_df) > 0:
-            st.markdown(f"**Showing {len(filtered_df)} site(s)**")
-        
-        # ------------------------------
-        # MAP VIEW
-        # ------------------------------
+        # Map View
         if show_map and len(filtered_df) > 0:
-            st.markdown("---")
-            st.subheader("🗺️ Site Map Visualization")
-            
             map_indices = filtered_df[filtered_df['LATITUDE'].notna() & filtered_df['LONGITUDE'].notna()].index.tolist()
-            
             if map_indices:
-                selected_map_indices = st.multiselect(
-                    "Select sites to highlight on map (optional)",
+                selected_map = st.multiselect(
+                    "Highlight sites",
                     options=map_indices,
-                    format_func=lambda x: f"{filtered_df.loc[x, 'SITE']} - {filtered_df.loc[x, 'REGION']}"
+                    format_func=lambda x: f"{filtered_df.loc[x, 'SITE']}"
                 )
-                
-                fig = create_map(filtered_df, selected_map_indices)
+                fig = create_map(filtered_df, selected_map)
                 if fig:
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                     
-                    if selected_map_indices:
-                        col1, col2, col3 = st.columns([2, 1, 1])
-                        with col2:
-                            if st.button("📄 Export Selected to PDF", use_container_width=True):
-                                with st.spinner("Generating PDF..."):
-                                    pdf_data = create_pdf_export(filtered_df, selected_map_indices)
-                                    if pdf_data:
-                                        b64 = base64.b64encode(pdf_data).decode()
-                                        href = f'<a href="data:application/pdf;base64,{b64}" download="site_report_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf" class="btn-map" style="text-align:center; text-decoration:none;">📥 Download PDF Report</a>'
-                                        st.markdown(href, unsafe_allow_html=True)
-                    else:
-                        st.info("💡 Select sites above to generate a PDF report")
-            else:
-                st.warning("⚠️ No sites with coordinates found in the filtered data")
+                    if selected_map:
+                        if st.button("📄 Export to PDF"):
+                            pdf_data = create_pdf_export(filtered_df, selected_map)
+                            if pdf_data:
+                                b64 = base64.b64encode(pdf_data).decode()
+                                href = f'<a href="data:application/pdf;base64,{b64}" download="site_report_{datetime.now().strftime("%Y%m%d")}.pdf" class="action-btn btn-map" style="text-decoration:none; text-align:center;">📥 Download PDF</a>'
+                                st.markdown(href, unsafe_allow_html=True)
         
-        # ------------------------------
-        # SITE CARDS
-        # ------------------------------
-        if len(filtered_df) > 0:
-            st.markdown("---")
-            records = filtered_df.to_dict(orient="records")
-            
-            for row in records:
-                html = create_site_card(row, st.session_state.search_term)
-                st.markdown(html, unsafe_allow_html=True)
-            
-            # Data Table
-            with st.expander("📊 View raw data table", expanded=False):
-                st.dataframe(filtered_df, use_container_width=True, height=400)
-            
-            # Export Options
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                csv = filtered_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="⬇️ Download Filtered Data as CSV",
-                    data=csv,
-                    file_name=f"globe_fo_extract_filtered_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
-            
-            with col2:
-                full_csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="⬇️ Download All Data as CSV",
-                    data=full_csv,
-                    file_name=f"globe_fo_extract_all_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
+        # Site Cards
+        st.markdown("---")
+        records = filtered_df.to_dict(orient="records")
+        for row in records:
+            html = create_site_card_html(row, st.session_state.search_term)
+            st.markdown(html, unsafe_allow_html=True)
+        
+        # Export
+        col1, col2 = st.columns(2)
+        with col1:
+            csv = filtered_df.to_csv(index=False).encode('utf-8')
+            st.download_button("⬇️ CSV Filtered", data=csv, file_name=f"sites_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
+        with col2:
+            full_csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("⬇️ CSV All", data=full_csv, file_name=f"all_sites_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
     
     else:
-        # ------------------------------
-        # WELCOME SCREEN (No search performed yet)
-        # ------------------------------
+        # Welcome Screen
+        stats = {
+            'total': len(df),
+            'regions': df['REGION'].nunique() if 'REGION' in df.columns else 0,
+            'coords': df['LATITUDE'].notna().sum() if 'LATITUDE' in df.columns else 0,
+            'contacts': df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in df.columns else 0,
+        }
+        
         st.markdown("""
-        <div class="welcome-container">
+        <div class="welcome-screen">
             <div class="welcome-icon">📍</div>
             <div class="welcome-title">Welcome to GPS Extractor</div>
-            <div class="welcome-subtitle">
-                Search for sites using PLAID or Site Name to get started.<br>
-                Click on any search result to navigate or call the FO directly.
-            </div>
-            <div class="welcome-hint">
-                💡 Enter a PLAID or Site Name in the search box above and click Search
-            </div>
+            <div class="welcome-subtitle">Search for sites using PLAID or Site Name to get started.</div>
+            <div class="welcome-hint">💡 Enter a PLAID or Site Name in the search box above</div>
         </div>
         """, unsafe_allow_html=True)
         
-        # Show database stats
-        stats = {
-            'total_sites': len(df),
-            'total_regions': df['REGION'].nunique() if 'REGION' in df.columns else 0,
-            'with_coords': df['LATITUDE'].notna().sum() if 'LATITUDE' in df.columns else 0,
-            'with_contact': df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in df.columns else 0,
-        }
-        
         st.markdown(f"""
-        <div class="stats-container" style="margin-top: 1rem;">
-            <div class="stat-item">
-                <span class="stat-number">{stats['total_sites']}</span>
-                <span class="stat-label">Total Sites in Database</span>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-number">{stats['total']}</span>
+                <span class="stat-label">Total Sites</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-number">{stats['total_regions']}</span>
+            <div class="stat-card">
+                <span class="stat-number">{stats['regions']}</span>
                 <span class="stat-label">Regions</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-number">{stats['with_coords']}</span>
-                <span class="stat-label">With Coordinates</span>
+            <div class="stat-card">
+                <span class="stat-number">{stats['coords']}</span>
+                <span class="stat-label">With Coords</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-number">{stats['with_contact']}</span>
+            <div class="stat-card">
+                <span class="stat-number">{stats['contacts']}</span>
                 <span class="stat-label">With Contact</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
+    
+    bottom_nav()
 
 # ------------------------------
 # ROUTING
 # ------------------------------
+# Handle URL query params for navigation
+query_params = st.query_params
+if 'page' in query_params and query_params['page'] == 'about':
+    st.session_state.page = 'about'
+elif st.session_state.page == 'about' and 'page' not in query_params:
+    st.session_state.page = 'main'
+
 if st.session_state.page == 'about':
     show_about()
 else:
     show_main()
-
-# ------------------------------
-# FOOTER
-# ------------------------------
-st.markdown("""
-    <hr style="margin-top: 2rem; opacity:0.3; border-color: #2a2a44;">
-    <div style="text-align: center; color: #6b6b85; font-size: 0.8rem; padding: 0.5rem;">
-        GPS Extractor · Globe FO Engr Contact · Developed by Engr. John Carlo Rabanes, ECE
-    </div>
-""", unsafe_allow_html=True)
