@@ -52,6 +52,8 @@ st.markdown("""
     * {
         box-sizing: border-box;
         -webkit-tap-highlight-color: transparent;
+        margin: 0;
+        padding: 0;
     }
 
     .main .block-container {
@@ -379,6 +381,9 @@ st.markdown("""
         gap: 0.3rem 1rem;
         margin: 0.5rem 0;
         font-size: 0.8rem;
+        background: var(--bg-secondary);
+        border-radius: 10px;
+        padding: 0.6rem;
     }
 
     .detail-item {
@@ -389,15 +394,16 @@ st.markdown("""
 
     .detail-label {
         color: var(--text-muted);
-        font-size: 0.6rem;
+        font-size: 0.55rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        font-weight: 600;
     }
 
     .detail-value {
         color: var(--text-secondary);
         font-weight: 500;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         word-break: break-word;
     }
 
@@ -734,6 +740,29 @@ st.markdown("""
             padding: 0.4rem 0.6rem;
         }
     }
+
+    /* ========================================
+       TOUCH OPTIMIZATION
+       ======================================== */
+    .action-btn, .nav-btn, .search-btn, .clear-btn {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+    }
+
+    /* ========================================
+       LOADING SKELETON
+       ======================================== */
+    .skeleton {
+        background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 8px;
+    }
+
+    @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -811,34 +840,24 @@ def highlight_text(text, search_term):
         return text
 
 def perform_exact_search(df, search_input):
-    """
-    Perform EXACT MATCH search on PLAID and SITE columns.
-    Supports multiple terms separated by commas.
-    Only returns exact matches (case-insensitive).
-    """
+    """Perform EXACT MATCH search on PLAID and SITE columns."""
     if not search_input or search_input.strip() == '':
         return pd.DataFrame()
     
-    # Split by comma and clean each term
     search_terms = [term.strip() for term in search_input.split(',') if term.strip()]
     
     if not search_terms:
         return pd.DataFrame()
     
-    # Create mask for each term
     mask = pd.Series([False] * len(df))
     
     for term in search_terms:
         term_mask = pd.Series([False] * len(df))
         
-        # Search in PLAID (EXACT match, case-insensitive)
         if 'PLAID' in df.columns:
-            # Exact match: strip whitespace, convert to uppercase, compare
             term_mask |= df['PLAID'].astype(str).str.strip().str.upper() == term.upper()
         
-        # Search in SITE (EXACT match, case-insensitive)
         if 'SITE' in df.columns:
-            # Exact match: strip whitespace, convert to uppercase, compare
             term_mask |= df['SITE'].astype(str).str.strip().str.upper() == term.upper()
         
         mask |= term_mask
@@ -847,6 +866,7 @@ def perform_exact_search(df, search_input):
 
 def create_site_card_html(row, search_term=""):
     """Create HTML for a site card optimized for mobile"""
+    # Use uppercase keys since we converted column names to uppercase
     plaid = safe_str(row.get("PLAID", ""))
     site = safe_str(row.get("SITE", ""))
     region = safe_str(row.get("REGION", ""))
@@ -857,7 +877,7 @@ def create_site_card_html(row, search_term=""):
     lat = safe_str(row.get("LATITUDE", ""))
     lon = safe_str(row.get("LONGITUDE", ""))
     site_add = safe_str(row.get("SITE_ADD", ""))
-    assigned_hub = safe_str(row.get("ASSIGNED_HUB", ""))
+    assigned_hub = safe_str(row.get("ASSIGN_HUB", ""))
     towerco = safe_str(row.get("TOWERCO", ""))
     new_assign_hub = safe_str(row.get("NEW ASSIGN HUB", ""))
     fo_onsite = safe_str(row.get("NEW ENGINEER_ANM1", ""))
@@ -890,6 +910,14 @@ def create_site_card_html(row, search_term=""):
     else:
         call_button = '<span class="action-btn btn-disabled">📞 No contact</span>'
     
+    # Build location string
+    location_parts = []
+    if region: location_parts.append(region)
+    if province: location_parts.append(province)
+    if municipality: location_parts.append(municipality)
+    if barangay: location_parts.append(barangay)
+    location_str = ' · '.join(location_parts)
+    
     html = f"""
     <div class="site-card">
         <div class="site-header">
@@ -898,7 +926,7 @@ def create_site_card_html(row, search_term=""):
                 <span class="site-plaid">{plaid_display}</span>
             </div>
         </div>
-        <div class="site-location">{region} · {province} · {municipality} · {barangay}</div>
+        <div class="site-location">{location_str}</div>
         <div class="site-tags">
             <span class="tag tag-territory">{territory}</span>
             <span class="tag tag-towerco">{towerco}</span>
@@ -917,7 +945,7 @@ def create_site_card_html(row, search_term=""):
                 <span class="detail-value">{assigned_hub}</span>
             </div>
             <div class="detail-item">
-                <span class="detail-label">New Assign Hub</span>
+                <span class="detail-label">New Hub</span>
                 <span class="detail-value">{new_assign_hub}</span>
             </div>
         </div>
@@ -1235,9 +1263,10 @@ def show_main():
         bottom_nav()
         return
     
-    # Search Section
+    # Search Section - Mobile Optimized
     st.markdown('<div class="search-section">', unsafe_allow_html=True)
     
+    # Use columns with better mobile layout
     col1, col2 = st.columns([3, 1])
     with col1:
         search_term = st.text_input(
@@ -1277,7 +1306,6 @@ def show_main():
         filtered_df = st.session_state.search_results
         
         if filtered_df is None or len(filtered_df) == 0:
-            # Show which terms were searched
             terms = [term.strip() for term in search_term.split(',') if term.strip()]
             terms_display = ', '.join([f'"{t}"' for t in terms])
             
@@ -1297,12 +1325,11 @@ def show_main():
             bottom_nav()
             return
         
-        # Show what was searched
         terms = [term.strip() for term in search_term.split(',') if term.strip()]
         terms_display = ', '.join([f'"{t}"' for t in terms])
         st.markdown(f"**Found {len(filtered_df)} site(s)** matching exactly: {terms_display}")
         
-        # Stats
+        # Stats - Using our custom HTML for better mobile display
         stats = {
             'total': len(filtered_df),
             'regions': filtered_df['REGION'].nunique() if 'REGION' in filtered_df.columns else 0,
@@ -1331,7 +1358,7 @@ def show_main():
         </div>
         """, unsafe_allow_html=True)
         
-        # Filters
+        # Filters - Mobile optimized
         col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
             if 'REGION' in filtered_df.columns:
@@ -1369,14 +1396,14 @@ def show_main():
                                 href = f'<a href="data:application/pdf;base64,{b64}" download="site_report_{datetime.now().strftime("%Y%m%d")}.pdf" class="action-btn btn-map" style="text-decoration:none; text-align:center;">📥 Download PDF</a>'
                                 st.markdown(href, unsafe_allow_html=True)
         
-        # Site Cards
+        # Site Cards - Mobile optimized
         st.markdown("---")
         records = filtered_df.to_dict(orient="records")
         for row in records:
             html = create_site_card_html(row, st.session_state.search_term)
             st.markdown(html, unsafe_allow_html=True)
         
-        # Export
+        # Export buttons - Mobile optimized
         col1, col2 = st.columns(2)
         with col1:
             csv = filtered_df.to_csv(index=False).encode('utf-8')
@@ -1434,7 +1461,6 @@ def show_main():
 # ------------------------------
 # ROUTING
 # ------------------------------
-# Handle URL query params for navigation
 query_params = st.query_params
 if 'page' in query_params and query_params['page'] == 'about':
     st.session_state.page = 'about'
