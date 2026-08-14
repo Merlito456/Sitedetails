@@ -18,59 +18,114 @@ st.set_page_config(
 )
 
 # ------------------------------
-# CUSTOM CSS
+# DARK THEME CUSTOM CSS
 # ------------------------------
 st.markdown("""
     <style>
-    /* main container */
+    /* Dark theme variables */
+    :root {
+        --bg-primary: #0a0a0f;
+        --bg-secondary: #14141e;
+        --bg-card: #1a1a2e;
+        --bg-card-hover: #222244;
+        --bg-input: #1e1e32;
+        --text-primary: #e8e8f0;
+        --text-secondary: #a0a0b8;
+        --text-muted: #6b6b85;
+        --border-color: #2a2a44;
+        --accent-blue: #4f8cf7;
+        --accent-blue-hover: #3a7bd5;
+        --accent-green: #34d399;
+        --accent-green-hover: #2bb386;
+        --accent-purple: #8b5cf6;
+        --shadow-color: rgba(0, 0, 0, 0.5);
+        --highlight-yellow: #fbbf24;
+    }
+
+    /* Main container */
     .main .block-container {
         padding: 1rem 1.5rem;
+        background: var(--bg-primary);
     }
     
-    /* card style for each row */
+    /* Override Streamlit default background */
+    .stApp {
+        background: var(--bg-primary);
+    }
+    
+    /* Card style */
     .site-card {
-        background: #ffffff;
+        background: var(--bg-card);
         border-radius: 16px;
         padding: 1.2rem 1.5rem;
         margin-bottom: 1.2rem;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
-        border: 1px solid #f0f2f6;
-        transition: 0.2s;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 20px var(--shadow-color);
     }
     .site-card:hover {
-        border-color: #d0d5dd;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+        background: var(--bg-card-hover);
+        border-color: var(--accent-purple);
+        box-shadow: 0 8px 30px var(--shadow-color);
+        transform: translateY(-2px);
     }
+    
     .site-title {
         font-weight: 600;
         font-size: 1.2rem;
-        color: #1f2937;
+        color: var(--text-primary);
         margin-bottom: 0.25rem;
     }
     .site-sub {
         font-size: 0.9rem;
-        color: #6b7280;
+        color: var(--text-secondary);
     }
+    
     .badge {
-        background: #eef2ff;
-        color: #4f46e5;
+        background: rgba(79, 140, 247, 0.15);
+        color: var(--accent-blue);
         padding: 0.2rem 0.8rem;
         border-radius: 40px;
         font-size: 0.75rem;
         font-weight: 500;
         display: inline-block;
         margin-right: 0.4rem;
+        border: 1px solid rgba(79, 140, 247, 0.2);
     }
     .badge-plaid {
-        background: #dbeafe;
-        color: #1e40af;
+        background: rgba(139, 92, 246, 0.2);
+        color: var(--accent-purple);
         padding: 0.2rem 0.8rem;
         border-radius: 40px;
         font-size: 0.75rem;
         font-weight: 600;
         display: inline-block;
         margin-right: 0.4rem;
+        border: 1px solid rgba(139, 92, 246, 0.2);
     }
+    .badge-territory {
+        background: rgba(52, 211, 153, 0.15);
+        color: var(--accent-green);
+        padding: 0.2rem 0.8rem;
+        border-radius: 40px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        display: inline-block;
+        margin-right: 0.4rem;
+        border: 1px solid rgba(52, 211, 153, 0.2);
+    }
+    .badge-towerco {
+        background: rgba(251, 191, 36, 0.15);
+        color: var(--highlight-yellow);
+        padding: 0.2rem 0.8rem;
+        border-radius: 40px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        display: inline-block;
+        margin-right: 0.4rem;
+        border: 1px solid rgba(251, 191, 36, 0.2);
+    }
+    
     .btn-group {
         display: flex;
         flex-wrap: wrap;
@@ -78,7 +133,7 @@ st.markdown("""
         margin-top: 0.6rem;
     }
     .btn-map {
-        background: #1a73e8;
+        background: var(--accent-blue);
         color: white !important;
         padding: 0.4rem 1.2rem;
         border-radius: 40px;
@@ -88,17 +143,19 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        transition: 0.2s;
+        transition: all 0.2s;
         border: none;
         cursor: pointer;
     }
     .btn-map:hover {
-        background: #1557b0;
+        background: var(--accent-blue-hover);
         color: white !important;
+        transform: scale(1.02);
+        box-shadow: 0 4px 15px rgba(79, 140, 247, 0.3);
     }
     .btn-call {
-        background: #16a34a;
-        color: white !important;
+        background: var(--accent-green);
+        color: #0a0a0f !important;
         padding: 0.4rem 1.2rem;
         border-radius: 40px;
         font-size: 0.85rem;
@@ -107,14 +164,17 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        transition: 0.2s;
+        transition: all 0.2s;
         border: none;
         cursor: pointer;
     }
     .btn-call:hover {
-        background: #15803d;
-        color: white !important;
+        background: var(--accent-green-hover);
+        color: #0a0a0f !important;
+        transform: scale(1.02);
+        box-shadow: 0 4px 15px rgba(52, 211, 153, 0.3);
     }
+    
     .detail-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -129,20 +189,21 @@ st.markdown("""
         gap: 0.2rem;
     }
     .detail-label {
-        color: #6b7280;
+        color: var(--text-muted);
         font-weight: 400;
         min-width: 80px;
     }
     .detail-value {
         font-weight: 500;
-        color: #1f2937;
+        color: var(--text-primary);
     }
+    
     .stats-container {
-        background: #f8fafc;
+        background: var(--bg-secondary);
         border-radius: 12px;
         padding: 1rem 1.5rem;
         margin: 1rem 0;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--border-color);
         display: flex;
         flex-wrap: wrap;
         gap: 2rem;
@@ -155,49 +216,122 @@ st.markdown("""
     .stat-number {
         font-size: 1.5rem;
         font-weight: 700;
-        color: #1f2937;
+        color: var(--text-primary);
     }
     .stat-label {
-        color: #6b7280;
+        color: var(--text-secondary);
         font-size: 0.9rem;
     }
+    
     .search-highlight {
-        background: #fef08a;
+        background: var(--highlight-yellow);
+        color: #0a0a0f;
         padding: 0.1rem 0.3rem;
         border-radius: 4px;
-    }
-    .stDataFrame {
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        overflow: hidden;
+        font-weight: 600;
     }
     
-    /* Search box styling */
+    /* Search container */
     .search-container {
-        background: white;
+        background: var(--bg-secondary);
         border-radius: 12px;
-        padding: 1rem;
-        border: 1px solid #e5e7eb;
+        padding: 1.5rem;
+        border: 1px solid var(--border-color);
         margin: 1rem 0;
     }
-    .search-input {
-        width: 100%;
-        padding: 0.75rem 1rem;
-        border: 2px solid #e5e7eb;
-        border-radius: 8px;
-        font-size: 1rem;
-        transition: 0.2s;
+    
+    /* Headers */
+    h1, h2, h3, h4 {
+        color: var(--text-primary) !important;
     }
-    .search-input:focus {
-        border-color: #1a73e8;
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    
+    /* Input fields */
+    .stTextInput > div > div > input {
+        background: var(--bg-input) !important;
+        border: 1px solid var(--border-color) !important;
+        color: var(--text-primary) !important;
+        border-radius: 8px !important;
     }
-    .search-icon {
-        position: relative;
-        left: 30px;
-        top: 2px;
-        color: #9ca3af;
+    .stTextInput > div > div > input:focus {
+        border-color: var(--accent-blue) !important;
+        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.1) !important;
+    }
+    
+    /* Select boxes */
+    .stSelectbox > div > div {
+        background: var(--bg-input) !important;
+        border: 1px solid var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    /* Checkbox */
+    .stCheckbox > label {
+        color: var(--text-secondary) !important;
+    }
+    
+    /* Dataframe */
+    .stDataFrame {
+        border: 1px solid var(--border-color) !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+    }
+    .stDataFrame > div {
+        background: var(--bg-secondary) !important;
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border-color) !important;
+        color: var(--text-primary) !important;
+        border-radius: 8px !important;
+        transition: all 0.2s !important;
+    }
+    .stButton > button:hover {
+        background: var(--bg-card-hover) !important;
+        border-color: var(--accent-blue) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    /* Download buttons */
+    .stDownloadButton > button {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border-color) !important;
+        color: var(--text-primary) !important;
+        border-radius: 8px !important;
+        transition: all 0.2s !important;
+    }
+    .stDownloadButton > button:hover {
+        background: var(--bg-card-hover) !important;
+        border-color: var(--accent-blue) !important;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: var(--bg-secondary) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+    .streamlit-expanderContent {
+        background: var(--bg-secondary) !important;
+        border-color: var(--border-color) !important;
+    }
+    
+    /* Info/Warning/Success messages */
+    .stAlert {
+        background: var(--bg-card) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    /* Plotly charts */
+    .js-plotly-plot .plotly .main-svg {
+        background: var(--bg-secondary) !important;
+    }
+    
+    /* Footer */
+    hr {
+        border-color: var(--border-color) !important;
     }
     
     /* mobile adjustments */
@@ -238,16 +372,16 @@ if 'search_term' not in st.session_state:
 # ------------------------------
 @st.cache_data
 def load_excel_data():
-    """Load data from Excel file"""
+    """Load data from Excel file (database.xlsx)"""
     try:
         # Try multiple possible locations
         possible_paths = [
-            "data/Globe FO Engr Conctat_Vendor.xlsx",
-            "Globe FO Engr Conctat_Vendor.xlsx",
-            "./data/Globe FO Engr Conctat_Vendor.xlsx",
-            "./Globe FO Engr Conctat_Vendor.xlsx",
-            Path(__file__).parent / "data" / "Globe FO Engr Conctat_Vendor.xlsx",
-            Path(__file__).parent / "Globe FO Engr Conctat_Vendor.xlsx",
+            "data/database.xlsx",
+            "database.xlsx",
+            "./data/database.xlsx",
+            "./database.xlsx",
+            Path(__file__).parent / "data" / "database.xlsx",
+            Path(__file__).parent / "database.xlsx",
         ]
         
         file_path = None
@@ -258,11 +392,11 @@ def load_excel_data():
         
         if file_path is None:
             st.error("""
-            ❌ **Excel file not found!**
+            ❌ **Database file not found!**
             
-            Please place `Globe FO Engr Conctat_Vendor.xlsx` in one of these locations:
-            - `data/Globe FO Engr Conctat_Vendor.xlsx`
-            - `Globe FO Engr Conctat_Vendor.xlsx` (root folder)
+            Please place `database.xlsx` in one of these locations:
+            - `data/database.xlsx`
+            - `database.xlsx` (root folder)
             """)
             return None
         
@@ -274,14 +408,14 @@ def load_excel_data():
         
         # Check if we have data
         if df.empty:
-            st.error("❌ The Excel file is empty!")
+            st.error("❌ The database file is empty!")
             return None
         
-        st.success(f"✅ Successfully loaded {len(df)} records from '{Path(file_path).name}'")
+        st.success(f"✅ Successfully loaded {len(df)} records from database")
         return df
         
     except Exception as e:
-        st.error(f"❌ Error loading file: {str(e)}")
+        st.error(f"❌ Error loading database: {str(e)}")
         return None
 
 def safe_str(val):
@@ -335,8 +469,8 @@ def create_site_card(row, search_term=""):
                 <div class="site-sub">{region_display} · {province_display} · {municipality_display} · {barangay_display}</div>
             </div>
             <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.2rem;">
-                <span class="badge" style="background:#f3f4f6; color:#374151;">{territory}</span>
-                <span class="badge" style="background:#fef3c7; color:#92400e;">{towerco}</span>
+                <span class="badge-territory">{territory}</span>
+                <span class="badge-towerco">{towerco}</span>
             </div>
         </div>
         <div class="detail-grid">
@@ -357,9 +491,9 @@ def create_site_card(row, search_term=""):
             maps_url = f"https://www.google.com/maps?q={lat},{lon}"
             html += f'<a href="{maps_url}" target="_blank" class="btn-map"><span>🗺️</span> Navigate to Google Maps</a>'
         except:
-            html += '<span style="background:#f3f4f6; color:#6b7280; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">⚠️ invalid coordinates</span>'
+            html += '<span style="background:#2a2a44; color:#6b6b85; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">⚠️ invalid coordinates</span>'
     else:
-        html += '<span style="background:#f3f4f6; color:#6b7280; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">⚠️ no coordinates</span>'
+        html += '<span style="background:#2a2a44; color:#6b6b85; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">⚠️ no coordinates</span>'
     
     # Call button
     if contact:
@@ -367,15 +501,15 @@ def create_site_card(row, search_term=""):
         if clean_contact:
             html += f'<a href="tel:{clean_contact}" class="btn-call"><span>📞</span> Call FO: {contact}</a>'
         else:
-            html += f'<span style="background:#f3f4f6; color:#6b7280; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">📞 {contact}</span>'
+            html += f'<span style="background:#2a2a44; color:#6b6b85; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">📞 {contact}</span>'
     else:
-        html += '<span style="background:#f3f4f6; color:#6b7280; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">📞 no contact</span>'
+        html += '<span style="background:#2a2a44; color:#6b6b85; padding:0.3rem 1rem; border-radius:40px; font-size:0.85rem;">📞 no contact</span>'
     
     html += "</div></div>"
     return html
 
 def create_map(df, selected_indices=None):
-    """Create interactive map"""
+    """Create interactive map with dark theme"""
     map_df = df[df['LATITUDE'].notna() & df['LONGITUDE'].notna()].copy()
     
     if map_df.empty:
@@ -390,7 +524,7 @@ def create_map(df, selected_indices=None):
         mode='markers',
         marker=go.scattermapbox.Marker(
             size=10,
-            color='#9ca3af',
+            color='#4f8cf7',
             opacity=0.6,
         ),
         text=map_df['SITE'] + '<br>' + map_df['SITE_ADD'],
@@ -429,10 +563,10 @@ def create_map(df, selected_indices=None):
                     hoverinfo='skip'
                 ))
     
-    # Configure map layout
+    # Configure map layout with dark theme
     fig.update_layout(
         mapbox=dict(
-            style='open-street-map',
+            style='dark',
             center=dict(
                 lat=map_df['LATITUDE'].mean() if not map_df.empty else 14.5995,
                 lon=map_df['LONGITUDE'].mean() if not map_df.empty else 121.0139
@@ -441,7 +575,9 @@ def create_map(df, selected_indices=None):
         ),
         height=500,
         margin=dict(l=0, r=0, t=0, b=0),
-        hovermode='closest'
+        hovermode='closest',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
     )
     
     return fig
@@ -476,7 +612,7 @@ def create_pdf_export(df, selected_indices):
             'CustomTitle',
             parent=styles['Heading1'],
             fontSize=24,
-            textColor=colors.HexColor('#1f2937'),
+            textColor=colors.HexColor('#e8e8f0'),
             alignment=1,
             spaceAfter=30
         )
@@ -485,7 +621,7 @@ def create_pdf_export(df, selected_indices):
             'Subtitle',
             parent=styles['Normal'],
             fontSize=12,
-            textColor=colors.HexColor('#6b7280'),
+            textColor=colors.HexColor('#a0a0b8'),
             alignment=1,
             spaceAfter=20
         )
@@ -529,16 +665,16 @@ def create_pdf_export(df, selected_indices):
         # Create table
         table = Table(table_data, colWidths=[0.8*inch, 1.2*inch, 1*inch, 1.2*inch, 1.2*inch, 1*inch, 1*inch])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f3f4f6')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1f2937')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#e8e8f0')),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#374151')),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#0a0a0f')),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#e8e8f0')),
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e5e7eb')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#2a2a44')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('TOPPADDING', (0, 0), (-1, -1), 8),
@@ -572,21 +708,21 @@ def create_pdf_export(df, selected_indices):
 def show_about():
     st.markdown("""
     <div style="text-align: center; padding: 2rem 0;">
-        <h1 style="font-size: 2.5rem; font-weight: 700; color: #1f2937;">📍 GPS Extractor</h1>
-        <p style="font-size: 1.2rem; color: #6b7280; margin-top: 0.5rem;">Globe FO Engineer Contact Management System</p>
+        <h1 style="font-size: 2.5rem; font-weight: 700; color: #e8e8f0;">📍 GPS Extractor</h1>
+        <p style="font-size: 1.2rem; color: #a0a0b8; margin-top: 0.5rem;">Globe FO Engineer Contact Management System</p>
     </div>
     """, unsafe_allow_html=True)
     
     # Developer Info
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                border-radius: 16px; padding: 2rem; color: white; margin: 1rem 0;">
+    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%); 
+                border-radius: 16px; padding: 2rem; border: 1px solid #2a2a44; margin: 1rem 0;">
         <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
             <div style="flex: 1;">
-                <h2 style="color: white; margin: 0;">👨‍💻 Developer</h2>
-                <h3 style="color: white; margin: 0.5rem 0;">Engr. John Carlo Rabanes, ECE</h3>
-                <p style="margin: 0.3rem 0;">📧 rabanes.johncarlo4@gmail.com</p>
-                <p style="margin: 0.3rem 0;">🏢 Nokia Shanghai Bell</p>
+                <h2 style="color: #e8e8f0; margin: 0;">👨‍💻 Developer</h2>
+                <h3 style="color: #a0a0b8; margin: 0.5rem 0;">Engr. John Carlo Rabanes, ECE</h3>
+                <p style="margin: 0.3rem 0; color: #6b6b85;">📧 rabanes.johncarlo4@gmail.com</p>
+                <p style="margin: 0.3rem 0; color: #6b6b85;">🏢 Nokia Shanghai Bell</p>
             </div>
             <div style="font-size: 4rem;">📡</div>
         </div>
@@ -597,9 +733,9 @@ def show_about():
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        <div style="background: #f0f4ff; border-radius: 12px; padding: 1.5rem; height: 100%;">
-            <h3 style="color: #4f46e5;">🎯 Mission</h3>
-            <p style="color: #374151; line-height: 1.6;">
+        <div style="background: #14141e; border-radius: 12px; padding: 1.5rem; height: 100%; border: 1px solid #2a2a44;">
+            <h3 style="color: #4f8cf7;">🎯 Mission</h3>
+            <p style="color: #a0a0b8; line-height: 1.6;">
                 To empower field operations engineers with seamless access to site information, 
                 enabling efficient navigation and communication for faster response times and 
                 improved network reliability across the Philippines.
@@ -609,9 +745,9 @@ def show_about():
     
     with col2:
         st.markdown("""
-        <div style="background: #fef3c7; border-radius: 12px; padding: 1.5rem; height: 100%;">
-            <h3 style="color: #92400e;">👁️ Vision</h3>
-            <p style="color: #374151; line-height: 1.6;">
+        <div style="background: #14141e; border-radius: 12px; padding: 1.5rem; height: 100%; border: 1px solid #2a2a44;">
+            <h3 style="color: #fbbf24;">👁️ Vision</h3>
+            <p style="color: #a0a0b8; line-height: 1.6;">
                 To be the leading digital tool for telecommunications field operations, 
                 setting the standard for efficiency, accuracy, and user experience in 
                 site management and engineer coordination.
@@ -678,9 +814,9 @@ def show_about():
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        <div style="background: #ecfdf5; border-left: 4px solid #10b981; border-radius: 8px; padding: 1.5rem;">
-            <h3 style="color: #065f46; margin-top: 0;">✅ Advantages</h3>
-            <ul style="color: #374151; line-height: 2;">
+        <div style="background: rgba(52, 211, 153, 0.1); border-left: 4px solid #34d399; border-radius: 8px; padding: 1.5rem;">
+            <h3 style="color: #34d399; margin-top: 0;">✅ Advantages</h3>
+            <ul style="color: #a0a0b8; line-height: 2;">
                 <li>🚀 Instant access to site data</li>
                 <li>🗺️ Seamless Google Maps integration</li>
                 <li>📞 Direct engineer contact</li>
@@ -696,9 +832,9 @@ def show_about():
     
     with col2:
         st.markdown("""
-        <div style="background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 8px; padding: 1.5rem;">
-            <h3 style="color: #991b1b; margin-top: 0;">⚠️ Disadvantages</h3>
-            <ul style="color: #374151; line-height: 2;">
+        <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 8px; padding: 1.5rem;">
+            <h3 style="color: #ef4444; margin-top: 0;">⚠️ Disadvantages</h3>
+            <ul style="color: #a0a0b8; line-height: 2;">
                 <li>🌐 Requires internet connection</li>
                 <li>📊 Data format dependent</li>
                 <li>🔧 Excel file management needed</li>
@@ -731,11 +867,11 @@ def show_main():
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
             <span style="font-size: 2rem;">📍</span>
-            <h1 style="display: inline-block; margin: 0; font-weight: 600;">GPS Extractor</h1>
-            <span style="background: #eef2ff; color: #4f46e5; padding: 0.2rem 1rem; border-radius: 40px; font-size: 0.8rem; font-weight: 500; margin-left: 0.5rem;">Globe FO Engr</span>
+            <h1 style="display: inline-block; margin: 0; font-weight: 600; color: #e8e8f0;">GPS Extractor</h1>
+            <span style="background: rgba(79, 140, 247, 0.2); color: #4f8cf7; padding: 0.2rem 1rem; border-radius: 40px; font-size: 0.8rem; font-weight: 500; margin-left: 0.5rem; border: 1px solid rgba(79, 140, 247, 0.2);">Globe FO Engr</span>
         </div>
-        <p style="color: #4b5563; margin-top: -0.2rem; font-size: 1rem;">
-            📊 Accessing <strong>Globe FO Engr Contact_Vendor.xlsx</strong> from system · Click on any map button to navigate in Google Maps · Click to call FO directly.
+        <p style="color: #a0a0b8; margin-top: -0.2rem; font-size: 1rem;">
+            📊 Accessing <strong style="color: #e8e8f0;">database.xlsx</strong> · Click on any map button to navigate in Google Maps · Click to call FO directly.
         </p>
     """, unsafe_allow_html=True)
     
@@ -748,7 +884,7 @@ def show_main():
         df = st.session_state.df
     
     if df is None or df.empty:
-        st.warning("⚠️ No data available. Please check the Excel file.")
+        st.warning("⚠️ No data available. Please check the database file.")
         return
     
     # Statistics
@@ -792,7 +928,8 @@ def show_main():
             "Search by PLAID or Site Name",
             value=st.session_state.search_term,
             placeholder="Enter PLAID or Site Name (e.g., SITE001 or Alpha)",
-            help="Search will look for matches in both PLAID and Site Name columns"
+            help="Search will look for matches in both PLAID and Site Name columns",
+            label_visibility="collapsed"
         )
     with col2:
         search_button = st.button("🔍 Search", use_container_width=True)
@@ -869,7 +1006,7 @@ def show_main():
             
             fig = create_map(filtered_df, selected_map_indices)
             if fig:
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                 
                 if selected_map_indices:
                     col1, col2, col3 = st.columns([2, 1, 1])
@@ -939,8 +1076,8 @@ else:
 # FOOTER
 # ------------------------------
 st.markdown("""
-    <hr style="margin-top: 2rem; opacity:0.3;">
-    <div style="text-align: center; color: #9ca3af; font-size: 0.8rem; padding: 0.5rem;">
+    <hr style="margin-top: 2rem; opacity:0.3; border-color: #2a2a44;">
+    <div style="text-align: center; color: #6b6b85; font-size: 0.8rem; padding: 0.5rem;">
         GPS Extractor · Globe FO Engr Contact · Developed by Engr. John Carlo Rabanes, ECE
     </div>
 """, unsafe_allow_html=True)
