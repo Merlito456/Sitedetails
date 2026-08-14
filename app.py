@@ -810,11 +810,11 @@ def highlight_text(text, search_term):
     except:
         return text
 
-def perform_search(df, search_input):
+def perform_exact_search(df, search_input):
     """
-    Perform search on PLAID and SITE columns.
+    Perform EXACT MATCH search on PLAID and SITE columns.
     Supports multiple terms separated by commas.
-    Returns exact matches only.
+    Only returns exact matches (case-insensitive).
     """
     if not search_input or search_input.strip() == '':
         return pd.DataFrame()
@@ -831,19 +831,15 @@ def perform_search(df, search_input):
     for term in search_terms:
         term_mask = pd.Series([False] * len(df))
         
-        # Search in PLAID (exact match, case-insensitive)
+        # Search in PLAID (EXACT match, case-insensitive)
         if 'PLAID' in df.columns:
+            # Exact match: strip whitespace, convert to uppercase, compare
             term_mask |= df['PLAID'].astype(str).str.strip().str.upper() == term.upper()
         
-        # Search in SITE (exact match, case-insensitive)
+        # Search in SITE (EXACT match, case-insensitive)
         if 'SITE' in df.columns:
+            # Exact match: strip whitespace, convert to uppercase, compare
             term_mask |= df['SITE'].astype(str).str.strip().str.upper() == term.upper()
-        
-        # Also support partial matches (contains) for flexibility
-        if 'PLAID' in df.columns:
-            term_mask |= df['PLAID'].astype(str).str.contains(term, case=False, na=False)
-        if 'SITE' in df.columns:
-            term_mask |= df['SITE'].astype(str).str.contains(term, case=False, na=False)
         
         mask |= term_mask
     
@@ -1206,7 +1202,7 @@ def show_about():
     features = [
         ("📍 GPS Navigation", "One-click Google Maps"),
         ("📞 Click-to-Call", "Direct contact dialing"),
-        ("🔍 Multi-Search", "Search multiple sites with commas"),
+        ("🔍 Exact Match Search", "Search multiple sites with commas"),
         ("🗺️ Map View", "Interactive site visualization"),
         ("📄 PDF Export", "Multiple sites export"),
         ("📱 Mobile Ready", "Fully responsive design"),
@@ -1249,7 +1245,7 @@ def show_main():
             value=st.session_state.search_term,
             placeholder="🔍 Search PLAID or Site Name...",
             label_visibility="collapsed",
-            help="Separate multiple searches with commas (e.g., SITE001, Alpha, PLAID002)"
+            help="Search for EXACT matches. Separate multiple searches with commas."
         )
     with col2:
         search_btn = st.button("🔍 Search", use_container_width=True)
@@ -1258,7 +1254,8 @@ def show_main():
     # Search hint
     st.markdown("""
     <div class="search-hint">
-        💡 Search for multiple sites: <code>SITE001, Alpha, PLAID002</code> (separate with commas)
+        🔍 <strong>Exact Match Only</strong> · Separate multiple searches with commas: 
+        <code>Min97, SITE001, PLAID002</code>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1273,7 +1270,7 @@ def show_main():
     if search_btn and search_term:
         st.session_state.search_term = search_term
         st.session_state.has_searched = True
-        st.session_state.search_results = perform_search(df, search_term)
+        st.session_state.search_results = perform_exact_search(df, search_term)
     
     # Display Results or Welcome
     if st.session_state.has_searched:
@@ -1287,13 +1284,13 @@ def show_main():
             st.markdown(f"""
             <div class="welcome-screen">
                 <div class="welcome-icon">🔍</div>
-                <div class="welcome-title">No Results Found</div>
+                <div class="welcome-title">No Exact Matches Found</div>
                 <div class="welcome-subtitle">
-                    No sites found matching: {terms_display}
+                    No sites found matching exactly: {terms_display}
                 </div>
                 <div class="welcome-hint">
-                    💡 Try checking the spelling or use partial matches<br>
-                    Separate multiple searches with commas
+                    💡 Search uses <strong>EXACT MATCH</strong> (case-insensitive)<br>
+                    Try checking the spelling or use partial matching with wildcards
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -1303,7 +1300,7 @@ def show_main():
         # Show what was searched
         terms = [term.strip() for term in search_term.split(',') if term.strip()]
         terms_display = ', '.join([f'"{t}"' for t in terms])
-        st.markdown(f"**Found {len(filtered_df)} site(s)** matching: {terms_display}")
+        st.markdown(f"**Found {len(filtered_df)} site(s)** matching exactly: {terms_display}")
         
         # Stats
         stats = {
@@ -1402,11 +1399,11 @@ def show_main():
             <div class="welcome-icon">📍</div>
             <div class="welcome-title">Welcome to GPS Extractor</div>
             <div class="welcome-subtitle">
-                Search for sites using PLAID or Site Name.<br>
+                Search for sites using <strong>EXACT MATCH</strong> on PLAID or Site Name.<br>
                 Search multiple sites with commas.
             </div>
             <div class="welcome-hint">
-                💡 Example: <code>SITE001, Alpha, PLAID002</code>
+                💡 Example: <code>Min97, SITE001, PLAID002</code>
             </div>
         </div>
         """, unsafe_allow_html=True)
