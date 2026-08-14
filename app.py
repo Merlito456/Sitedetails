@@ -181,6 +181,27 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(52, 211, 153, 0.3);
     }
     
+    .btn-back {
+        background: var(--bg-card);
+        color: var(--text-primary) !important;
+        padding: 0.5rem 1.5rem;
+        border-radius: 40px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+        border: 1px solid var(--border-color);
+        cursor: pointer;
+    }
+    .btn-back:hover {
+        background: var(--bg-card-hover);
+        border-color: var(--accent-blue);
+        transform: translateX(-3px);
+    }
+    
     .detail-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -281,6 +302,14 @@ st.markdown("""
         border-radius: 8px;
         border: 1px dashed var(--border-color);
         display: inline-block;
+    }
+    
+    /* Navigation buttons */
+    .nav-container {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
     }
     
     /* Headers */
@@ -385,6 +414,11 @@ st.markdown("""
         border-color: var(--border-color) !important;
     }
     
+    /* About page specific */
+    .about-back-container {
+        margin-bottom: 1.5rem;
+    }
+    
     /* mobile adjustments */
     @media (max-width: 640px) {
         .site-card {
@@ -406,6 +440,10 @@ st.markdown("""
         }
         .welcome-title {
             font-size: 1.4rem;
+        }
+        .nav-container {
+            flex-direction: column;
+            align-items: stretch;
         }
     }
     </style>
@@ -760,11 +798,39 @@ def create_pdf_export(df, selected_indices):
         return None
 
 # ------------------------------
+# NAVIGATION COMPONENT
+# ------------------------------
+def navigation_buttons():
+    """Display navigation buttons in the top right"""
+    col1, col2, col3 = st.columns([4, 1, 1])
+    with col2:
+        if st.button("🏠 Home", use_container_width=True):
+            st.session_state.page = 'main'
+            st.session_state.has_searched = False
+            st.session_state.search_results = None
+            st.rerun()
+    with col3:
+        if st.button("ℹ️ About", use_container_width=True):
+            st.session_state.page = 'about'
+            st.rerun()
+
+# ------------------------------
 # ABOUT PAGE
 # ------------------------------
 def show_about():
+    # Back button at top
+    st.markdown('<div class="about-back-container">', unsafe_allow_html=True)
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.page = 'main'
+            st.rerun()
+    with col2:
+        st.markdown("")  # Spacer
+    st.markdown('</div>', unsafe_allow_html=True)
+    
     st.markdown("""
-    <div style="text-align: center; padding: 2rem 0;">
+    <div style="text-align: center; padding: 1rem 0 2rem 0;">
         <h1 style="font-size: 2.5rem; font-weight: 700; color: #e8e8f0;">📍 GPS Extractor</h1>
         <p style="font-size: 1.2rem; color: #a0a0b8; margin-top: 0.5rem;">Globe FO Engineer Contact Management System</p>
     </div>
@@ -904,23 +970,20 @@ def show_about():
     
     st.markdown("---")
     st.caption("© 2026 GPS Extractor | Developed for Globe Telecom Operations")
+    
+    # Back button at bottom
+    st.markdown('<div style="text-align: center; margin-top: 2rem;">', unsafe_allow_html=True)
+    if st.button("← Back to Home", use_container_width=False):
+        st.session_state.page = 'main'
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------------------
 # MAIN PAGE
 # ------------------------------
 def show_main():
     # Navigation
-    col1, col2, col3 = st.columns([3, 1, 1])
-    with col2:
-        if st.button("🏠 Home", use_container_width=True):
-            st.session_state.page = 'main'
-            st.session_state.has_searched = False
-            st.session_state.search_results = None
-            st.rerun()
-    with col3:
-        if st.button("ℹ️ About", use_container_width=True):
-            st.session_state.page = 'about'
-            st.rerun()
+    navigation_buttons()
     
     # Title
     st.markdown("""
