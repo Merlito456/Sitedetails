@@ -62,12 +62,18 @@ st.markdown("""
         border: 1px solid var(--border-color);
         transition: all 0.3s ease;
         box-shadow: 0 4px 20px var(--shadow-color);
+        animation: fadeIn 0.5s ease-in;
     }
     .site-card:hover {
         background: var(--bg-card-hover);
         border-color: var(--accent-purple);
         box-shadow: 0 8px 30px var(--shadow-color);
         transform: translateY(-2px);
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     
     .site-title {
@@ -240,6 +246,43 @@ st.markdown("""
         margin: 1rem 0;
     }
     
+    /* Welcome message */
+    .welcome-container {
+        text-align: center;
+        padding: 3rem 1rem;
+        background: var(--bg-secondary);
+        border-radius: 16px;
+        border: 1px solid var(--border-color);
+        margin: 2rem 0;
+    }
+    .welcome-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+    .welcome-title {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+    }
+    .welcome-subtitle {
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+        max-width: 600px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+    .welcome-hint {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background: var(--bg-card);
+        border-radius: 8px;
+        border: 1px dashed var(--border-color);
+        display: inline-block;
+    }
+    
     /* Headers */
     h1, h2, h3, h4 {
         color: var(--text-primary) !important;
@@ -251,10 +294,15 @@ st.markdown("""
         border: 1px solid var(--border-color) !important;
         color: var(--text-primary) !important;
         border-radius: 8px !important;
+        font-size: 1rem !important;
+        padding: 0.75rem 1rem !important;
     }
     .stTextInput > div > div > input:focus {
         border-color: var(--accent-blue) !important;
         box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.1) !important;
+    }
+    .stTextInput > div > div > input::placeholder {
+        color: var(--text-muted) !important;
     }
     
     /* Select boxes */
@@ -286,11 +334,14 @@ st.markdown("""
         color: var(--text-primary) !important;
         border-radius: 8px !important;
         transition: all 0.2s !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: 500 !important;
     }
     .stButton > button:hover {
         background: var(--bg-card-hover) !important;
         border-color: var(--accent-blue) !important;
         color: var(--text-primary) !important;
+        transform: translateY(-1px);
     }
     
     /* Download buttons */
@@ -353,6 +404,9 @@ st.markdown("""
             flex-direction: column;
             gap: 0.5rem;
         }
+        .welcome-title {
+            font-size: 1.4rem;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -366,6 +420,10 @@ if 'df' not in st.session_state:
     st.session_state.df = None
 if 'search_term' not in st.session_state:
     st.session_state.search_term = ''
+if 'has_searched' not in st.session_state:
+    st.session_state.has_searched = False
+if 'search_results' not in st.session_state:
+    st.session_state.search_results = None
 
 # ------------------------------
 # FUNCTIONS
@@ -411,7 +469,6 @@ def load_excel_data():
             st.error("❌ The database file is empty!")
             return None
         
-        st.success(f"✅ Successfully loaded {len(df)} records from database")
         return df
         
     except Exception as e:
@@ -857,6 +914,8 @@ def show_main():
     with col2:
         if st.button("🏠 Home", use_container_width=True):
             st.session_state.page = 'main'
+            st.session_state.has_searched = False
+            st.session_state.search_results = None
             st.rerun()
     with col3:
         if st.button("ℹ️ About", use_container_width=True):
@@ -871,11 +930,11 @@ def show_main():
             <span style="background: rgba(79, 140, 247, 0.2); color: #4f8cf7; padding: 0.2rem 1rem; border-radius: 40px; font-size: 0.8rem; font-weight: 500; margin-left: 0.5rem; border: 1px solid rgba(79, 140, 247, 0.2);">Globe FO Engr</span>
         </div>
         <p style="color: #a0a0b8; margin-top: -0.2rem; font-size: 1rem;">
-            📊 Accessing <strong style="color: #e8e8f0;">database.xlsx</strong> · Click on any map button to navigate in Google Maps · Click to call FO directly.
+            📊 Search <strong style="color: #e8e8f0;">database.xlsx</strong> · Click on any map button to navigate in Google Maps · Click to call FO directly.
         </p>
     """, unsafe_allow_html=True)
     
-    # Load data
+    # Load data (but don't display yet)
     if st.session_state.df is None:
         df = load_excel_data()
         if df is not None:
@@ -887,37 +946,8 @@ def show_main():
         st.warning("⚠️ No data available. Please check the database file.")
         return
     
-    # Statistics
-    stats = {
-        'total_sites': len(df),
-        'total_regions': df['REGION'].nunique() if 'REGION' in df.columns else 0,
-        'with_coords': df['LATITUDE'].notna().sum() if 'LATITUDE' in df.columns else 0,
-        'with_contact': df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in df.columns else 0,
-    }
-    
-    st.markdown(f"""
-    <div class="stats-container">
-        <div class="stat-item">
-            <span class="stat-number">{stats['total_sites']}</span>
-            <span class="stat-label">Total Sites</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-number">{stats['total_regions']}</span>
-            <span class="stat-label">Regions</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-number">{stats['with_coords']}</span>
-            <span class="stat-label">With Coordinates</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-number">{stats['with_contact']}</span>
-            <span class="stat-label">With Contact</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
     # ------------------------------
-    # SEARCH SECTION
+    # SEARCH SECTION (Always visible)
     # ------------------------------
     st.markdown("---")
     st.subheader("🔍 Search Sites")
@@ -937,132 +967,229 @@ def show_main():
     
     if clear_button:
         st.session_state.search_term = ''
+        st.session_state.has_searched = False
+        st.session_state.search_results = None
         st.rerun()
     
+    # Perform search when button is clicked
     if search_button and search_term:
         st.session_state.search_term = search_term
-    
-    # Apply search filter
-    filtered_df = df.copy()
-    search_term = st.session_state.search_term
-    
-    if search_term:
+        st.session_state.has_searched = True
+        
         # Search in PLAID and SITE columns (case-insensitive)
-        mask = pd.Series([False] * len(filtered_df))
-        if 'PLAID' in filtered_df.columns:
-            mask |= filtered_df['PLAID'].astype(str).str.contains(search_term, case=False, na=False)
-        if 'SITE' in filtered_df.columns:
-            mask |= filtered_df['SITE'].astype(str).str.contains(search_term, case=False, na=False)
-        filtered_df = filtered_df[mask]
+        mask = pd.Series([False] * len(df))
+        if 'PLAID' in df.columns:
+            mask |= df['PLAID'].astype(str).str.contains(search_term, case=False, na=False)
+        if 'SITE' in df.columns:
+            mask |= df['SITE'].astype(str).str.contains(search_term, case=False, na=False)
         
-        if len(filtered_df) == 0:
-            st.warning(f"No sites found matching '{search_term}'")
+        st.session_state.search_results = df[mask].copy()
     
     # ------------------------------
-    # FILTERS
+    # DISPLAY RESULTS (only if searched)
     # ------------------------------
-    col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
-    
-    with col1:
-        if 'REGION' in filtered_df.columns:
-            regions = ['All'] + sorted(filtered_df['REGION'].dropna().unique().tolist())
-            selected_region = st.selectbox('Filter by Region', regions)
-            if selected_region != 'All':
-                filtered_df = filtered_df[filtered_df['REGION'] == selected_region]
-    
-    with col2:
-        if 'TOWERCO' in filtered_df.columns:
-            towercos = ['All'] + sorted(filtered_df['TOWERCO'].dropna().unique().tolist())
-            selected_towerco = st.selectbox('Filter by TowerCo', towercos)
-            if selected_towerco != 'All':
-                filtered_df = filtered_df[filtered_df['TOWERCO'] == selected_towerco]
-    
-    with col3:
-        show_with_coords = st.checkbox('Only with coords', value=False)
-        if show_with_coords:
-            filtered_df = filtered_df[filtered_df['LATITUDE'].notna() & filtered_df['LONGITUDE'].notna()]
-    
-    with col4:
-        show_map = st.checkbox('Show Map View', value=False)
-    
-    # Display count
-    st.markdown(f"**Showing {len(filtered_df)} site(s)**" + (f" matching '{search_term}'" if search_term else ""))
-    
-    # ------------------------------
-    # MAP VIEW
-    # ------------------------------
-    if show_map:
-        st.markdown("---")
-        st.subheader("🗺️ Site Map Visualization")
+    if st.session_state.has_searched:
+        filtered_df = st.session_state.search_results
         
-        map_indices = filtered_df[filtered_df['LATITUDE'].notna() & filtered_df['LONGITUDE'].notna()].index.tolist()
+        if filtered_df is None or len(filtered_df) == 0:
+            st.warning(f"No sites found matching '{st.session_state.search_term}'")
+            # Show empty state with search hint
+            st.markdown("""
+            <div class="welcome-container" style="padding: 2rem;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                <div class="welcome-title">No Results Found</div>
+                <div class="welcome-subtitle">
+                    Try searching with a different PLAID or Site Name.
+                </div>
+                <div class="welcome-hint">
+                    💡 Tip: Search is case-insensitive and matches partial terms
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            return
         
-        if map_indices:
-            selected_map_indices = st.multiselect(
-                "Select sites to highlight on map (optional)",
-                options=map_indices,
-                format_func=lambda x: f"{filtered_df.loc[x, 'SITE']} - {filtered_df.loc[x, 'REGION']}"
-            )
-            
-            fig = create_map(filtered_df, selected_map_indices)
-            if fig:
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-                
-                if selected_map_indices:
-                    col1, col2, col3 = st.columns([2, 1, 1])
-                    with col2:
-                        if st.button("📄 Export Selected to PDF", use_container_width=True):
-                            with st.spinner("Generating PDF..."):
-                                pdf_data = create_pdf_export(filtered_df, selected_map_indices)
-                                if pdf_data:
-                                    b64 = base64.b64encode(pdf_data).decode()
-                                    href = f'<a href="data:application/pdf;base64,{b64}" download="site_report_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf" class="btn-map" style="text-align:center; text-decoration:none;">📥 Download PDF Report</a>'
-                                    st.markdown(href, unsafe_allow_html=True)
-                else:
-                    st.info("💡 Select sites above to generate a PDF report")
-        else:
-            st.warning("⚠️ No sites with coordinates found in the filtered data")
-    
-    # ------------------------------
-    # SITE CARDS
-    # ------------------------------
-    st.markdown("---")
-    
-    if len(filtered_df) == 0:
-        st.info("No records match the selected filters.")
-    else:
-        records = filtered_df.to_dict(orient="records")
+        # Show search results count
+        st.markdown(f"**Found {len(filtered_df)} site(s)** matching '{st.session_state.search_term}'")
         
-        for row in records:
-            html = create_site_card(row, search_term)
-            st.markdown(html, unsafe_allow_html=True)
+        # Statistics for search results
+        stats = {
+            'total_sites': len(filtered_df),
+            'total_regions': filtered_df['REGION'].nunique() if 'REGION' in filtered_df.columns else 0,
+            'with_coords': filtered_df['LATITUDE'].notna().sum() if 'LATITUDE' in filtered_df.columns else 0,
+            'with_contact': filtered_df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in filtered_df.columns else 0,
+        }
         
-        # Data Table
-        with st.expander("📊 View raw data table", expanded=False):
-            st.dataframe(filtered_df, use_container_width=True, height=400)
+        st.markdown(f"""
+        <div class="stats-container">
+            <div class="stat-item">
+                <span class="stat-number">{stats['total_sites']}</span>
+                <span class="stat-label">Results Found</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{stats['total_regions']}</span>
+                <span class="stat-label">Regions</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{stats['with_coords']}</span>
+                <span class="stat-label">With Coordinates</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{stats['with_contact']}</span>
+                <span class="stat-label">With Contact</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Export Options
-        col1, col2 = st.columns(2)
+        # ------------------------------
+        # FILTERS (for search results)
+        # ------------------------------
+        col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
         
         with col1:
-            csv = filtered_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="⬇️ Download Filtered Data as CSV",
-                data=csv,
-                file_name=f"globe_fo_extract_filtered_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+            if 'REGION' in filtered_df.columns:
+                regions = ['All'] + sorted(filtered_df['REGION'].dropna().unique().tolist())
+                selected_region = st.selectbox('Filter by Region', regions)
+                if selected_region != 'All':
+                    filtered_df = filtered_df[filtered_df['REGION'] == selected_region]
         
         with col2:
-            full_csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="⬇️ Download All Data as CSV",
-                data=full_csv,
-                file_name=f"globe_fo_extract_all_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+            if 'TOWERCO' in filtered_df.columns:
+                towercos = ['All'] + sorted(filtered_df['TOWERCO'].dropna().unique().tolist())
+                selected_towerco = st.selectbox('Filter by TowerCo', towercos)
+                if selected_towerco != 'All':
+                    filtered_df = filtered_df[filtered_df['TOWERCO'] == selected_towerco]
+        
+        with col3:
+            show_with_coords = st.checkbox('Only with coords', value=False)
+            if show_with_coords:
+                filtered_df = filtered_df[filtered_df['LATITUDE'].notna() & filtered_df['LONGITUDE'].notna()]
+        
+        with col4:
+            show_map = st.checkbox('Show Map View', value=False)
+        
+        # Update count after filters
+        if len(filtered_df) > 0:
+            st.markdown(f"**Showing {len(filtered_df)} site(s)**")
+        
+        # ------------------------------
+        # MAP VIEW
+        # ------------------------------
+        if show_map and len(filtered_df) > 0:
+            st.markdown("---")
+            st.subheader("🗺️ Site Map Visualization")
+            
+            map_indices = filtered_df[filtered_df['LATITUDE'].notna() & filtered_df['LONGITUDE'].notna()].index.tolist()
+            
+            if map_indices:
+                selected_map_indices = st.multiselect(
+                    "Select sites to highlight on map (optional)",
+                    options=map_indices,
+                    format_func=lambda x: f"{filtered_df.loc[x, 'SITE']} - {filtered_df.loc[x, 'REGION']}"
+                )
+                
+                fig = create_map(filtered_df, selected_map_indices)
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                    
+                    if selected_map_indices:
+                        col1, col2, col3 = st.columns([2, 1, 1])
+                        with col2:
+                            if st.button("📄 Export Selected to PDF", use_container_width=True):
+                                with st.spinner("Generating PDF..."):
+                                    pdf_data = create_pdf_export(filtered_df, selected_map_indices)
+                                    if pdf_data:
+                                        b64 = base64.b64encode(pdf_data).decode()
+                                        href = f'<a href="data:application/pdf;base64,{b64}" download="site_report_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf" class="btn-map" style="text-align:center; text-decoration:none;">📥 Download PDF Report</a>'
+                                        st.markdown(href, unsafe_allow_html=True)
+                    else:
+                        st.info("💡 Select sites above to generate a PDF report")
+            else:
+                st.warning("⚠️ No sites with coordinates found in the filtered data")
+        
+        # ------------------------------
+        # SITE CARDS
+        # ------------------------------
+        if len(filtered_df) > 0:
+            st.markdown("---")
+            records = filtered_df.to_dict(orient="records")
+            
+            for row in records:
+                html = create_site_card(row, st.session_state.search_term)
+                st.markdown(html, unsafe_allow_html=True)
+            
+            # Data Table
+            with st.expander("📊 View raw data table", expanded=False):
+                st.dataframe(filtered_df, use_container_width=True, height=400)
+            
+            # Export Options
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                csv = filtered_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="⬇️ Download Filtered Data as CSV",
+                    data=csv,
+                    file_name=f"globe_fo_extract_filtered_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            
+            with col2:
+                full_csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="⬇️ Download All Data as CSV",
+                    data=full_csv,
+                    file_name=f"globe_fo_extract_all_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+    
+    else:
+        # ------------------------------
+        # WELCOME SCREEN (No search performed yet)
+        # ------------------------------
+        st.markdown("""
+        <div class="welcome-container">
+            <div class="welcome-icon">📍</div>
+            <div class="welcome-title">Welcome to GPS Extractor</div>
+            <div class="welcome-subtitle">
+                Search for sites using PLAID or Site Name to get started.<br>
+                Click on any search result to navigate or call the FO directly.
+            </div>
+            <div class="welcome-hint">
+                💡 Enter a PLAID or Site Name in the search box above and click Search
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Show database stats
+        stats = {
+            'total_sites': len(df),
+            'total_regions': df['REGION'].nunique() if 'REGION' in df.columns else 0,
+            'with_coords': df['LATITUDE'].notna().sum() if 'LATITUDE' in df.columns else 0,
+            'with_contact': df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in df.columns else 0,
+        }
+        
+        st.markdown(f"""
+        <div class="stats-container" style="margin-top: 1rem;">
+            <div class="stat-item">
+                <span class="stat-number">{stats['total_sites']}</span>
+                <span class="stat-label">Total Sites in Database</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{stats['total_regions']}</span>
+                <span class="stat-label">Regions</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{stats['with_coords']}</span>
+                <span class="stat-label">With Coordinates</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">{stats['with_contact']}</span>
+                <span class="stat-label">With Contact</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ------------------------------
 # ROUTING
