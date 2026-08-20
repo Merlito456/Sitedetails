@@ -42,6 +42,8 @@ if 'device_fingerprint' not in st.session_state:
     st.session_state.device_fingerprint = None
 if 'device_info' not in st.session_state:
     st.session_state.device_info = None
+if 'browser_fingerprint' not in st.session_state:
+    st.session_state.browser_fingerprint = None
 
 # ------------------------------
 # SECURITY CONFIG
@@ -52,95 +54,74 @@ SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
 # ------------------------------
 # DEVICE FINGERPRINT FUNCTIONS
 # ------------------------------
-def get_system_fingerprint():
-    """Generate a system fingerprint from available hardware info"""
-    try:
-        # Get system information
-        system_info = {
-            'system': platform.system(),
-            'node': platform.node(),
-            'release': platform.release(),
-            'version': platform.version(),
-            'machine': platform.machine(),
-            'processor': platform.processor(),
-            'hostname': os.environ.get('COMPUTERNAME', os.environ.get('HOSTNAME', 'unknown'))
-        }
-        
-        # Create a unique fingerprint
-        info_str = "|".join(str(v) for v in system_info.values())
-        fingerprint = hashlib.sha256(info_str.encode()).hexdigest()[:16]
-        
-        return {
-            'fingerprint': fingerprint,
-            'system': system_info['system'],
-            'hostname': system_info['hostname'],
-            'machine': system_info['machine']
-        }
-    except:
-        return {
-            'fingerprint': hashlib.md5(str(uuid.getnode()).encode()).hexdigest()[:16],
-            'system': 'Unknown',
-            'hostname': 'Unknown',
-            'machine': 'Unknown'
-        }
-
-def get_device_fingerprint():
-    """
-    Get device fingerprint from browser/device info.
-    """
-    # Try to get from session state first
-    if st.session_state.device_fingerprint:
-        return st.session_state.device_fingerprint
-    
+def get_browser_fingerprint():
+    """Get browser fingerprint from JavaScript (more unique per user)"""
     # Try to get from query params (set by JavaScript)
     query_params = st.query_params
-    fp = query_params.get('device_fp', None)
+    fp = query_params.get('browser_fp', None)
     if fp:
-        st.session_state.device_fingerprint = fp
+        st.session_state.browser_fingerprint = fp
         return fp
     
-    # Generate a fingerprint from available data
-    import platform
-    import sys
+    # Try to get from session state
+    if st.session_state.browser_fingerprint:
+        return st.session_state.browser_fingerprint
     
-    info = [
-        platform.system(),
-        platform.node(),
-        platform.release(),
-        platform.version(),
-        platform.machine(),
-        str(sys.getsizeof(object()))
-    ]
-    info_str = "|".join(str(i) for i in info)
-    fp = hashlib.md5(info_str.encode()).hexdigest()[:16]
+    # Generate a temporary one (will be replaced by JavaScript)
+    temp_fp = hashlib.md5(str(uuid.uuid4()).encode()).hexdigest()[:16]
+    st.session_state.browser_fingerprint = temp_fp
+    return temp_fp
+
+def get_server_fingerprint():
+    """Get server-side fingerprint (what you saw in the image)"""
+    try:
+        info = [
+            platform.system(),
+            platform.node(),
+            platform.release(),
+            platform.version(),
+            platform.machine(),
+            str(sys.getsizeof(object()))
+        ]
+        info_str = "|".join(str(i) for i in info)
+        return hashlib.md5(info_str.encode()).hexdigest()[:16]
+    except:
+        return "server_unknown"
+
+def get_device_fingerprint():
+    """Get combined device fingerprint (browser + server)"""
+    browser_fp = get_browser_fingerprint()
+    server_fp = get_server_fingerprint()
     
-    st.session_state.device_fingerprint = fp
-    return fp
+    # Combine both for uniqueness
+    combined = f"{browser_fp}|{server_fp}"
+    return hashlib.md5(combined.encode()).hexdigest()[:16]
 
 def get_device_info():
     """Get detailed device information"""
     if st.session_state.device_info:
         return st.session_state.device_info
     
-    system_fp = get_system_fingerprint()
-    browser_fp = get_device_fingerprint()
+    browser_fp = get_browser_fingerprint()
+    server_fp = get_server_fingerprint()
+    device_fp = get_device_fingerprint()
     
     device_info = {
-        'fingerprint': browser_fp,
-        'system_fingerprint': system_fp['fingerprint'],
-        'os': system_fp['system'],
-        'hostname': system_fp['hostname'],
-        'machine': system_fp['machine'],
-        'browser': 'Detected via JavaScript',
-        'screen': 'Detected via JavaScript',
-        'device_id': f"DEV-{browser_fp[:8].upper()}-{browser_fp[-8:].upper()}"
+        'device_fingerprint': device_fp,
+        'browser_fingerprint': browser_fp,
+        'server_fingerprint': server_fp,
+        'device_id': f"DEV-{device_fp[:8].upper()}-{device_fp[-8:].upper()}",
+        'server_os': platform.system(),
+        'server_hostname': platform.node(),
+        'browser_detected': browser_fp != 'unknown' and len(browser_fp) > 10,
+        'is_permanent': True  # Browser fingerprint is semi-permanent (changes with browser reset)
     }
     
     st.session_state.device_info = device_info
     return device_info
 
 # ------------------------------
-# EXCEL DATA LOADER
+# EXCEL DATA LOADER (same as before)
 # ------------------------------
 @st.cache_data
 def load_excel_data(file_path):
@@ -154,32 +135,24 @@ def load_excel_data(file_path):
         return None
 
 def get_site_by_plaid(df, plaid):
-    """Get site data by PLAID (exact match)"""
     if df is None or df.empty:
         return None
-    
     site = df[df['PLAID'].astype(str).str.strip() == str(plaid).strip()]
     if not site.empty:
         return site.iloc[0].to_dict()
-    
     return None
 
 def get_site_by_name(df, site_name):
-    """Get site data by SITE NAME (exact match)"""
     if df is None or df.empty:
         return None
-    
     site = df[df['SITE'].astype(str).str.strip().str.upper() == str(site_name).strip().upper()]
     if not site.empty:
         return site.iloc[0].to_dict()
-    
     return None
 
 def get_all_sites(df):
-    """Get all sites with basic info"""
     if df is None or df.empty:
         return []
-    
     sites = []
     for idx, row in df.iterrows():
         sites.append({
@@ -202,7 +175,6 @@ def get_online_time():
             "https://worldtimeapi.org/api/timezone/Etc/UTC",
             "https://timeapi.io/api/time/current/utc",
         ]
-        
         for api in time_apis:
             try:
                 response = requests.get(api, timeout=5)
@@ -221,22 +193,17 @@ def get_online_time():
         return None
 
 def generate_secure_token(site_plaid, user_email, user_name, allowed_devices=""):
-    """
-    Generate a secure token with embedded data including allowed devices.
-    """
     current_time = get_online_time()
     if current_time is None:
         current_time = datetime.utcnow()
     
     expiry = current_time + timedelta(days=TOKEN_EXPIRY_DAYS)
     
-    # Clean allowed devices
     devices = []
     if allowed_devices:
         device_list = [d.strip() for d in allowed_devices.split(',') if d.strip()]
         devices = [hashlib.sha256(d.encode()).hexdigest() for d in device_list]
     
-    # Create payload
     payload = {
         'c': current_time.isoformat(),
         'e': expiry.isoformat(),
@@ -246,25 +213,16 @@ def generate_secure_token(site_plaid, user_email, user_name, allowed_devices="")
         'd': devices
     }
     
-    # Convert to JSON string
     payload_json = json.dumps(payload, separators=(',', ':'))
-    
-    # Create HMAC signature
     signature = hashlib.sha256(f"{payload_json}|{SECRET_KEY}".encode()).hexdigest()
-    
-    # Combine payload and signature
     token_data = f"{payload_json}|{signature}"
-    
-    # Encode to hex
     token = token_data.encode().hex()
     
     return token
 
 def validate_token(token, df, device_fingerprint=None):
-    """Validate a token and return site data if valid."""
     try:
         token = token.strip()
-        
         if '%' in token:
             token = urllib.parse.unquote(token)
         
@@ -278,7 +236,6 @@ def validate_token(token, df, device_fingerprint=None):
             return None, "Invalid token format - expected 2 parts"
         
         payload_json, signature = parts
-        
         expected_signature = hashlib.sha256(f"{payload_json}|{SECRET_KEY}".encode()).hexdigest()
         if signature != expected_signature:
             return None, "Invalid token signature - token may be tampered"
@@ -342,24 +299,31 @@ def validate_token(token, df, device_fingerprint=None):
 # DEVICE FINGERPRINT CAPTURE (JavaScript)
 # ------------------------------
 def inject_device_fingerprint_script():
-    """Inject JavaScript to capture device fingerprint."""
+    """Inject JavaScript to capture browser fingerprint (permanent per browser)."""
     fingerprint_js = """
     <script>
-    function getDeviceFingerprint() {
+    function getBrowserFingerprint() {
+        // Collect browser/device characteristics
         var screen = window.screen;
         var nav = navigator;
         
+        // These components make the fingerprint unique per browser/device
         var components = [
-            nav.userAgent,
-            nav.platform,
-            nav.language,
-            screen.width + 'x' + screen.height,
-            screen.colorDepth,
-            new Date().getTimezoneOffset(),
-            nav.hardwareConcurrency || 'unknown',
-            nav.deviceMemory || 'unknown'
+            nav.userAgent,                    // Browser + OS version
+            nav.platform,                     // Platform (Win, Mac, Linux)
+            nav.language,                     // Language preference
+            nav.hardwareConcurrency || 'unknown', // CPU cores
+            nav.deviceMemory || 'unknown',    // RAM (if available)
+            screen.width + 'x' + screen.height, // Resolution
+            screen.colorDepth,                // Color depth
+            new Date().getTimezoneOffset(),   // Timezone
+            nav.maxTouchPoints || 0,          // Touch capability
+            navigator.webdriver ? 'webdriver' : 'normal', // Headless detection
+            navigator.doNotTrack || 'unknown', // Privacy setting
+            navigator.cookieEnabled ? 'cookies' : 'no_cookies' // Cookies enabled
         ];
         
+        // Create a hash from the components
         var fingerprint = components.join('|');
         var hash = 0;
         for (var i = 0; i < fingerprint.length; i++) {
@@ -367,20 +331,28 @@ def inject_device_fingerprint_script():
             hash = ((hash << 5) - hash) + char;
             hash = hash & hash;
         }
-        var fp = 'device_' + Math.abs(hash).toString(16);
+        var fp = Math.abs(hash).toString(16).padStart(16, '0');
         
+        // Store in session storage (persists per browser session)
         try {
-            sessionStorage.setItem('device_fingerprint', fp);
+            sessionStorage.setItem('browser_fingerprint', fp);
         } catch(e) {}
         
+        // Also try localStorage (persists across sessions)
+        try {
+            localStorage.setItem('device_fingerprint', fp);
+        } catch(e) {}
+        
+        // Send to Streamlit via query param
         var url = new URL(window.location);
-        url.searchParams.set('device_fp', fp);
+        url.searchParams.set('browser_fp', fp);
         window.history.replaceState({}, '', url);
         
         return fp;
     }
     
-    getDeviceFingerprint();
+    // Execute immediately
+    getBrowserFingerprint();
     </script>
     """
     components.html(fingerprint_js, height=0)
@@ -389,7 +361,7 @@ def inject_device_fingerprint_script():
 # DEVICE INFO DISPLAY
 # ------------------------------
 def show_device_info():
-    """Display current device information"""
+    """Display current device information with permanence status"""
     device_info = get_device_info()
     
     st.markdown("""
@@ -404,52 +376,87 @@ def show_device_info():
     col1, col2 = st.columns(2)
     
     with col1:
+        # Device ID - Permanent
         st.markdown(f"""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 1rem; border: 1px solid #2a2a44; margin: 0.3rem 0;">
-            <div style="color: #6b6b85; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">Device ID</div>
-            <div style="color: #60a5fa; font-family: monospace; font-size: 0.9rem; word-break: break-all;">{device_info['device_id']}</div>
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 1rem; border: 1px solid #34d399; margin: 0.3rem 0;">
+            <div style="color: #34d399; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                ✅ PERMANENT DEVICE ID
+            </div>
+            <div style="color: #60a5fa; font-family: monospace; font-size: 0.9rem; word-break: break-all;">
+                {device_info['device_id']}
+            </div>
+            <div style="color: #8a8aa0; font-size: 0.6rem; margin-top: 0.3rem;">
+                This ID is generated from your browser/device characteristics
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
+        # Browser Fingerprint
         st.markdown(f"""
         <div style="background: #1a1a2e; border-radius: 12px; padding: 1rem; border: 1px solid #2a2a44; margin: 0.3rem 0;">
-            <div style="color: #6b6b85; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">Device Fingerprint</div>
-            <div style="color: #fbbf24; font-family: monospace; font-size: 0.8rem; word-break: break-all;">{device_info['fingerprint']}</div>
+            <div style="color: #fbbf24; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                🔑 BROWSER FINGERPRINT
+            </div>
+            <div style="color: #fbbf24; font-family: monospace; font-size: 0.8rem; word-break: break-all;">
+                {device_info['browser_fingerprint']}
+            </div>
+            <div style="color: #8a8aa0; font-size: 0.6rem; margin-top: 0.3rem;">
+                Changes if you clear browser data or use a different browser
+            </div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
+        # Server Fingerprint (Temporary)
         st.markdown(f"""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 1rem; border: 1px solid #2a2a44; margin: 0.3rem 0;">
-            <div style="color: #6b6b85; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">Operating System</div>
-            <div style="color: #d0d0e0; font-size: 0.9rem;">{device_info['os']}</div>
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 1rem; border: 1px solid #ef4444; margin: 0.3rem 0;">
+            <div style="color: #ef4444; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                ⚠️ TEMPORARY SERVER ID
+            </div>
+            <div style="color: #f87171; font-family: monospace; font-size: 0.8rem; word-break: break-all;">
+                {device_info['server_fingerprint']}
+            </div>
+            <div style="color: #8a8aa0; font-size: 0.6rem; margin-top: 0.3rem;">
+                This changes with each server restart - DO NOT USE FOR PERMANENT ACCESS
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
+        # OS Info
         st.markdown(f"""
         <div style="background: #1a1a2e; border-radius: 12px; padding: 1rem; border: 1px solid #2a2a44; margin: 0.3rem 0;">
-            <div style="color: #6b6b85; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">Hostname / Machine</div>
-            <div style="color: #d0d0e0; font-size: 0.9rem;">{device_info['hostname']} ({device_info['machine']})</div>
+            <div style="color: #6b6b85; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">System Info</div>
+            <div style="color: #d0d0e0; font-size: 0.9rem;">{device_info['server_os']}</div>
+            <div style="color: #8a8aa0; font-size: 0.7rem;">{device_info['server_hostname']}</div>
         </div>
         """, unsafe_allow_html=True)
     
+    # Info about permanence
     st.markdown("""
-    <div style="background: #1a1a2e; border-radius: 12px; padding: 0.8rem; border: 1px solid #2a2a44; margin: 0.3rem 0;">
-        <div style="color: #8a8aa0; font-size: 0.7rem;">
-            ℹ️ <strong>Note:</strong> Browsers do not expose MAC addresses or IMEI numbers for security reasons.
-            The fingerprint above is a unique hash of your device's characteristics.
-            For production use with actual MAC/IMEI, you would need a mobile app.
+    <div style="background: #1a1a2e; border-radius: 12px; padding: 0.8rem; border: 1px solid #2a2a44; margin: 0.5rem 0;">
+        <div style="color: #8a8aa0; font-size: 0.75rem;">
+            <strong>📌 About Device IDs:</strong>
+            <ul style="margin: 0.3rem 0; padding-left: 1.2rem;">
+                <li><strong style="color: #34d399;">Permanent Device ID</strong> - Generated from your browser/device. Stays the same unless you change browser or clear all data.</li>
+                <li><strong style="color: #fbbf24;">Browser Fingerprint</strong> - Changes if you clear browser cookies/localStorage.</li>
+                <li><strong style="color: #ef4444;">Server ID</strong> - TEMPORARY! Changes when the app restarts. Do not use for access control.</li>
+            </ul>
+            <div style="margin-top: 0.5rem; padding: 0.5rem; background: #0a0a0f; border-radius: 8px; border: 1px solid #2a2a44;">
+                💡 <strong>Best Practice:</strong> Use the <span style="color: #34d399;">Permanent Device ID</span> for access control.
+                This will work across browser sessions.
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
     # Copy button
-    if st.button("📋 Copy Device ID", use_container_width=True):
-        st.code(device_info['device_id'])
+    device_id = device_info['device_id']
+    if st.button("📋 Copy Permanent Device ID", use_container_width=True):
+        st.code(device_id)
         st.success("✅ Device ID copied to clipboard!")
 
 # ------------------------------
-# DARK THEME CSS
+# DARK THEME CSS (same as before - truncated for space)
 # ------------------------------
 st.markdown("""
     <style>
@@ -462,7 +469,6 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-
     .stTextInput label, .stSelectbox label, .stCheckbox label {
         color: #e8e8f0 !important;
         font-weight: 500 !important;
@@ -481,7 +487,6 @@ st.markdown("""
         color: #e8e8f0 !important;
         font-weight: 600 !important;
     }
-
     .app-header {
         background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%);
         padding: 0.8rem 1rem;
@@ -519,7 +524,6 @@ st.markdown("""
         border: 1px solid rgba(79, 140, 247, 0.2);
         margin-left: 0.3rem;
     }
-
     .secure-card {
         background: #1a1a2e;
         border-radius: 16px;
@@ -528,21 +532,9 @@ st.markdown("""
         border: 1px solid #2a2a44;
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
-    .secure-card h2 { 
-        color: #e8e8f0; 
-        margin-bottom: 0.5rem;
-        font-weight: 700;
-    }
-    .secure-card p { 
-        color: #c0c0d0; 
-        font-size: 0.95rem;
-        line-height: 1.6;
-    }
-    .secure-card .sub-text {
-        color: #8a8aa0;
-        font-size: 0.85rem;
-    }
-
+    .secure-card h2 { color: #e8e8f0; margin-bottom: 0.5rem; font-weight: 700; }
+    .secure-card p { color: #c0c0d0; font-size: 0.95rem; line-height: 1.6; }
+    .secure-card .sub-text { color: #8a8aa0; font-size: 0.85rem; }
     .site-card {
         background: #1a1a2e;
         border-radius: 16px;
@@ -552,19 +544,9 @@ st.markdown("""
         animation: fadeIn 0.4s ease-out;
         transition: all 0.3s;
     }
-    .site-card:hover {
-        border-color: #4f8cf7;
-        box-shadow: 0 0 20px rgba(79, 140, 247, 0.05);
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(12px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .site-name { 
-        font-size: 1.1rem; 
-        font-weight: 600; 
-        color: #e8e8f0; 
-    }
+    .site-card:hover { border-color: #4f8cf7; box-shadow: 0 0 20px rgba(79, 140, 247, 0.05); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .site-name { font-size: 1.1rem; font-weight: 600; color: #e8e8f0; }
     .site-plaid {
         background: rgba(139, 92, 246, 0.25);
         color: #a78bfa;
@@ -576,16 +558,8 @@ st.markdown("""
         display: inline-block;
         margin-left: 0.3rem;
     }
-    .site-location { 
-        font-size: 0.85rem; 
-        color: #b0b0c8; 
-        margin-bottom: 0.5rem; 
-    }
-    .detail-item {
-        display: flex;
-        flex-direction: column;
-        gap: 0.05rem;
-    }
+    .site-location { font-size: 0.85rem; color: #b0b0c8; margin-bottom: 0.5rem; }
+    .detail-item { display: flex; flex-direction: column; gap: 0.05rem; }
     .detail-label {
         color: #7a7a95;
         font-size: 0.6rem;
@@ -593,24 +567,10 @@ st.markdown("""
         letter-spacing: 0.5px;
         font-weight: 600;
     }
-    .detail-value {
-        color: #d0d0e0;
-        font-weight: 500;
-        font-size: 0.85rem;
-    }
-    .detail-value.fo-name { 
-        color: #60a5fa; 
-        font-weight: 600; 
-    }
-    .detail-value.highlight { 
-        color: #fbbf24; 
-        font-weight: 600; 
-    }
-    .detail-value.missing { 
-        color: #f87171; 
-        font-style: italic; 
-    }
-
+    .detail-value { color: #d0d0e0; font-weight: 500; font-size: 0.85rem; }
+    .detail-value.fo-name { color: #60a5fa; font-weight: 600; }
+    .detail-value.highlight { color: #fbbf24; font-weight: 600; }
+    .detail-value.missing { color: #f87171; font-style: italic; }
     .btn {
         padding: 0.5rem 1.2rem;
         border-radius: 40px;
@@ -631,15 +591,10 @@ st.markdown("""
     .btn-success:hover { background: #2bb386; transform: scale(1.02); }
     .btn-danger { background: #ef4444; }
     .btn-danger:hover { background: #dc2626; transform: scale(1.02); }
-    .btn-outline {
-        background: transparent;
-        border: 1px solid #2a2a44;
-        color: #b0b0c8;
-    }
+    .btn-outline { background: transparent; border: 1px solid #2a2a44; color: #b0b0c8; }
     .btn-outline:hover { background: #1a1a2e; border-color: #4f8cf7; color: #e8e8f0; }
     .btn-purple { background: #8b5cf6; }
     .btn-purple:hover { background: #7c3aed; transform: scale(1.02); }
-
     .token-box {
         background: #0d0d1a;
         border-radius: 8px;
@@ -651,17 +606,8 @@ st.markdown("""
         font-size: 0.8rem;
         margin: 0.5rem 0;
     }
-    .token-box .label {
-        color: #7a7a95;
-        font-size: 0.6rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .token-box code {
-        color: #fbbf24;
-        font-size: 0.75rem;
-    }
-
+    .token-box .label { color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .token-box code { color: #fbbf24; font-size: 0.75rem; }
     .site-details-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -669,7 +615,6 @@ st.markdown("""
         margin: 0.5rem 0;
         font-size: 0.85rem;
     }
-
     .stats-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -683,19 +628,8 @@ st.markdown("""
         border: 1px solid #2a2a44;
         text-align: center;
     }
-    .stat-number { 
-        font-size: 1.6rem; 
-        font-weight: 700; 
-        color: #e8e8f0; 
-        display: block; 
-    }
-    .stat-label { 
-        font-size: 0.7rem; 
-        color: #8a8aa0; 
-        display: block; 
-        margin-top: 0.15rem; 
-    }
-
+    .stat-number { font-size: 1.6rem; font-weight: 700; color: #e8e8f0; display: block; }
+    .stat-label { font-size: 0.7rem; color: #8a8aa0; display: block; margin-top: 0.15rem; }
     .time-status {
         background: #14141e;
         border-radius: 8px;
@@ -709,7 +643,6 @@ st.markdown("""
     }
     .time-status .online { color: #34d399; }
     .time-status .offline { color: #f87171; }
-
     .tag {
         padding: 0.15rem 0.6rem;
         border-radius: 40px;
@@ -718,17 +651,8 @@ st.markdown("""
         border: 1px solid transparent;
         display: inline-block;
     }
-    .tag-territory {
-        background: rgba(52, 211, 153, 0.15);
-        color: #34d399;
-        border-color: rgba(52, 211, 153, 0.2);
-    }
-    .tag-towerco {
-        background: rgba(251, 191, 36, 0.15);
-        color: #fbbf24;
-        border-color: rgba(251, 191, 36, 0.2);
-    }
-
+    .tag-territory { background: rgba(52, 211, 153, 0.15); color: #34d399; border-color: rgba(52, 211, 153, 0.2); }
+    .tag-towerco { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border-color: rgba(251, 191, 36, 0.2); }
     .bottom-nav {
         position: fixed;
         bottom: 0;
@@ -758,7 +682,6 @@ st.markdown("""
     }
     .nav-item .nav-icon { font-size: 1.2rem; }
     .nav-item.active { color: #4f8cf7; }
-
     .batch-result {
         background: #14141e;
         border-radius: 12px;
@@ -778,30 +701,6 @@ st.markdown("""
         gap: 0.5rem;
     }
     .batch-result .site-item:last-child { border-bottom: none; }
-
-    .device-info-box {
-        background: #14141e;
-        border-radius: 12px;
-        padding: 1rem;
-        border: 1px solid #2a2a44;
-        margin: 0.5rem 0;
-    }
-    .device-info-box .label {
-        color: #6b6b85;
-        font-size: 0.6rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .device-info-box .value {
-        color: #d0d0e0;
-        font-family: monospace;
-        font-size: 0.85rem;
-        word-break: break-all;
-    }
-    .device-info-box .value.highlight {
-        color: #60a5fa;
-        font-weight: 600;
-    }
 
     @media (min-width: 769px) {
         .main .block-container { padding: 1rem 2rem 6rem 2rem; max-width: 1200px !important; margin: 0 auto; }
@@ -830,8 +729,8 @@ def app_header():
     time_status = "✅ Online" if online_time else "⚠️ Offline (system time)"
     time_class = "online" if online_time else "offline"
     
-    device_fp = get_device_fingerprint()
-    device_display = device_fp[:8] + "..." + device_fp[-4:] if device_fp else "Not detected"
+    device_info = get_device_info()
+    device_display = device_info['device_id']
     
     st.markdown(f"""
     <div class="app-header">
@@ -846,7 +745,7 @@ def app_header():
                     🕐 <span class="{time_class}">{time_status}</span>
                 </span>
                 <span class="time-status" style="font-size:0.6rem;">
-                    📱 <span style="color:#60a5fa;">{device_display}</span>
+                    📱 <span style="color:#34d399;">{device_display}</span>
                 </span>
                 <button class="btn btn-outline" onclick="location.href='/'">🏠 Home</button>
                 <button class="btn btn-outline" onclick="location.href='?page=admin'">⚙️ Admin</button>
@@ -856,7 +755,7 @@ def app_header():
     """, unsafe_allow_html=True)
 
 # ------------------------------
-# ADMIN PAGE (truncated for space - same as before)
+# ADMIN PAGE (main functions - truncated for space)
 # ------------------------------
 def show_admin():
     app_header()
@@ -888,12 +787,12 @@ def show_admin():
         <p>Generate secure time-verified links with device restrictions for authorized users.</p>
         <p class="sub-text">
             🔍 Search by PLAID or Site Name (exact match) · Batch generate links with comma-separated values<br>
-            📱 Add MAC addresses and/or IMEI numbers separated by commas to restrict device access
+            📱 Add <strong style="color: #34d399;">Permanent Device IDs</strong> (starting with DEV-) to restrict access
         </p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Show Device Info first
+    # Show Device Info
     show_device_info()
     
     tab_labels = ["📊 Sites", "🔑 Generate Token", "📦 Batch Generate"]
@@ -952,7 +851,7 @@ def show_admin():
         if len(sites) > 50:
             st.info(f"Showing first 50 of {len(sites)} sites. Use search to find specific sites.")
     
-    # Tab 1: Single Token (truncated - same as before)
+    # Tab 1: Single Token
     with tabs[1]:
         st.subheader("🔑 Generate Single Token with Device Restriction")
         
@@ -963,9 +862,8 @@ def show_admin():
             selected_site_display = st.selectbox("Select Site", list(site_options.keys()), key="single_site_select")
             selected_site_plaid = site_options[selected_site_display]
             
-            # Show current device fingerprint for easy copying
             device_info = get_device_info()
-            st.info(f"📱 Your Device ID: `{device_info['device_id']}` (copy this to allow your device)")
+            st.info(f"📱 Your Permanent Device ID: `{device_info['device_id']}` (copy this to allow your device)")
             
             col1, col2 = st.columns(2)
             with col1:
@@ -973,29 +871,24 @@ def show_admin():
             with col2:
                 user_name = st.text_input("User Name", placeholder="John Doe", key="single_name")
             
-            st.markdown("""
+            st.markdown(f"""
             <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0;">
                 <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0;">
-                    📱 Enter allowed device identifiers (MAC addresses and/or IMEI numbers) separated by commas.
-                    <br>You can use your Device ID above: <code style="color: #60a5fa;">DEV-XXXX-XXXX</code>
-                    <br>Example: <code>AA:BB:CC:DD:EE:FF, 123456789012345, DEV-XXXX-XXXX</code>
+                    📱 Enter allowed device identifiers separated by commas.<br>
+                    <strong style="color: #34d399;">Permanent Device IDs</strong> start with DEV- (e.g., <code style="color: #60a5fa;">{device_info['device_id']}</code>)<br>
+                    You can also use MAC addresses or IMEI numbers: <code>AA:BB:CC:DD:EE:FF, 123456789012345</code>
                 </p>
             </div>
             """, unsafe_allow_html=True)
             
             allowed_devices = st.text_input(
-                "Allowed Devices (MAC, IMEI, or Device ID - comma separated)",
-                placeholder=f"AA:BB:CC:DD:EE:FF, 123456789012345, {device_info['device_id']}",
+                "Allowed Devices (Device IDs, MAC, or IMEI - comma separated)",
+                placeholder=f"{device_info['device_id']}, AA:BB:CC:DD:EE:FF, 123456789012345",
                 key="single_devices"
             )
             
             if st.button("🔗 Generate Link", key="single_generate", use_container_width=True):
                 if user_email and user_name and selected_site_plaid:
-                    # If user wants to allow their own device, add it to the list
-                    if allowed_devices and device_info['device_id'] not in allowed_devices:
-                        # Ask if they want to add their device
-                        pass
-                    
                     token = generate_secure_token(selected_site_plaid, user_email, user_name, allowed_devices)
                     base_url = st.get_option('server.baseUrlPath') or ""
                     link = f"{base_url}/?token={token}"
@@ -1026,7 +919,7 @@ def show_admin():
                             <div style="color: #d0d0e0;">📧 Email: {user_email}</div>
                             <div style="color: #d0d0e0;">⏰ Expires: {expiry.strftime('%B %d, %Y at %I:%M %p UTC')}</div>
                             <div style="color: #d0d0e0;">📍 Site: {selected_site_display}</div>
-                            <div style="color: #60a5fa;">📱 Device Restricted: {device_count} device(s)</div>
+                            <div style="color: #34d399;">📱 Device Restricted: {device_count} device(s)</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
@@ -1034,7 +927,7 @@ def show_admin():
         else:
             st.warning("No sites available.")
     
-    # Tab 2: Batch Generate (truncated - same as before)
+    # Tab 2: Batch Generate
     with tabs[2]:
         st.subheader("📦 Batch Generate Links with Device Restriction")
         
@@ -1063,15 +956,15 @@ def show_admin():
         st.markdown("""
         <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0;">
             <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0;">
-                📱 Enter allowed device identifiers (MAC addresses and/or IMEI numbers) separated by commas.
-                <br>These will apply to ALL generated links.
+                📱 Enter allowed device identifiers separated by commas.<br>
+                These will apply to ALL generated links.
             </p>
         </div>
         """, unsafe_allow_html=True)
         
         batch_devices = st.text_input(
-            "Allowed Devices (MAC, IMEI, or Device ID - comma separated)",
-            placeholder="AA:BB:CC:DD:EE:FF, 123456789012345",
+            "Allowed Devices (Device IDs, MAC, or IMEI - comma separated)",
+            placeholder="DEV-XXXX-XXXX, AA:BB:CC:DD:EE:FF, 123456789012345",
             key="batch_devices"
         )
         
@@ -1257,14 +1150,15 @@ def display_site_card(site_data):
     """, unsafe_allow_html=True)
 
 # ------------------------------
-# SITE VIEWER PAGE (truncated - same as before)
+# SITE VIEWER PAGE
 # ------------------------------
 def show_site_viewer(token):
     inject_device_fingerprint_script()
     
     app_header()
     
-    device_fp = get_device_fingerprint()
+    device_info = get_device_info()
+    device_fp = device_info['device_fingerprint']
     
     df = st.session_state.df
     if df is None:
@@ -1288,7 +1182,6 @@ def show_site_viewer(token):
         return
     
     token = token.strip()
-    
     if '%' in token:
         try:
             token = urllib.parse.unquote(token)
@@ -1303,7 +1196,10 @@ def show_site_viewer(token):
             <h2 style="color: #ef4444;">🔒 Access Denied</h2>
             <p style="color: #d0d0e0;">{error}</p>
             <p style="color: #8a8aa0; font-size: 0.85rem;">The link may have expired, been invalidated, or your device is not authorized.</p>
-            <p style="color: #60a5fa; font-size: 0.8rem;">Your Device ID: <code>{get_device_info()['device_id']}</code></p>
+            <div style="background: #1a1a2e; border-radius: 8px; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #2a2a44;">
+                <div style="color: #34d399; font-size: 0.7rem;">Your Permanent Device ID: <code style="color: #60a5fa;">{device_info['device_id']}</code></div>
+                <div style="color: #8a8aa0; font-size: 0.6rem;">Use this Device ID when requesting access</div>
+            </div>
             <br>
             <button class="btn btn-primary" onclick="location.href='/'">🏠 Return to Home</button>
         </div>
@@ -1349,12 +1245,12 @@ def show_site_viewer(token):
                     👤 {site_data.get('_user_name', 'Authorized User')}
                 </span>
                 <br>
-                <span style="color: #60a5fa; font-size: 0.7rem;">
+                <span style="color: #34d399; font-size: 0.7rem;">
                     {device_status} {f"({device_count} device(s))" if device_count > 0 else ""}
                 </span>
                 <br>
                 <span style="color: #8a8aa0; font-size: 0.6rem;">
-                    📱 Your Device: {get_device_info()['device_id']}
+                    📱 Your Device: {device_info['device_id']}
                 </span>
             </div>
         </div>
@@ -1487,12 +1383,12 @@ def show_main():
         <p class="sub-text">
             ⏰ Time is verified online to prevent fraud<br>
             🔒 Each link is unique and expires after 30 days<br>
-            📱 Device restrictions can be applied to prevent unauthorized access
+            📱 Device restrictions use <strong style="color: #34d399;">Permanent Device IDs</strong>
         </p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Show device info on main page too
+    # Show device info on main page
     with st.expander("📱 View Your Device Information", expanded=False):
         show_device_info()
     
