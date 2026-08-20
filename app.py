@@ -32,17 +32,49 @@ if 'page' not in st.session_state:
     st.session_state.page = 'main'
 
 # ------------------------------
-# COLUMN MAPPINGS (Based on actual Excel file)
+# ACTUAL COLUMN MAPPINGS FROM YOUR EXCEL
 # ------------------------------
+# Based on your actual headers:
+# PLAID, SITE, WIRELINE_NAME (NMS NAMES), BCF_NAME, REGION, PROVINCE, 
+# MUNICIPALITY, BARANGAY, TERRITORY, LATITUDE, LONGITUDE, SITE_ADD, 
+# ASSIGN_HUB, TOWERCO, NEW ASSIGN_AREA, NEW ASSIGN_AREA NAME, 
+# NEW ASSIGN_HUB, NEW ENGINEER_AH, NEW ENGINEER_ANM1, 
+# NEW ENGINEER_ANM1 ID NUMBER, CONTACT NUMBER, NEW ANM HEAD, NEW ROH
+
+COLUMN_MAPPINGS = {
+    'PLAID': 'PLAID',
+    'SITE': 'SITE',
+    'REGION': 'REGION',
+    'PROVINCE': 'PROVINCE',
+    'MUNICIPALITY': 'MUNICIPALITY',
+    'BARANGAY': 'BARANGAY',
+    'TERRITORY': 'TERRITORY',
+    'LATITUDE': 'LATITUDE',
+    'LONGITUDE': 'LONGITUDE',
+    'SITE_ADD': 'SITE_ADD',
+    'ASSIGNED_HUB': 'ASSIGN_HUB',           # Column: ASSIGN_HUB
+    'TOWERCO': 'TOWERCO',
+    'NEW_ASSIGN_HUB': 'NEW ASSIGN_HUB',     # Column: NEW ASSIGN_HUB - GLOBE HUB
+    'FO_ONSITE': 'NEW ENGINEER_ANM1',        # Column: NEW ENGINEER_ANM1 - FO ONSITE
+    'CONTACT_NUMBER': 'CONTACT NUMBER',      # Column: CONTACT NUMBER - FO NUMBER
+    'NEW_ENGINEER_AH': 'NEW ENGINEER_AH',
+    'NEW_ANM_HEAD': 'NEW ANM HEAD',
+    'NEW_ROH': 'NEW ROH',
+}
+
 # Display names for the UI
 DISPLAY_NAMES = {
     'NEW ASSIGN HUB': '🌐 GLOBE HUB',
     'NEW ENGINEER_ANM1': '👤 FO ONSITE',
     'CONTACT NUMBER': '📞 FO NUMBER',
+    'ASSIGN_HUB': '📋 ASSIGN HUB',
+    'NEW ENGINEER_AH': '👤 AH',
+    'NEW ANM HEAD': '👤 ANM HEAD',
+    'NEW ROH': '📋 ROH',
 }
 
 # ------------------------------
-# DARK THEME CUSTOM CSS
+# DARK THEME CUSTOM CSS (condensed for space)
 # ------------------------------
 st.markdown("""
     <style>
@@ -64,7 +96,6 @@ st.markdown("""
         --accent-green: #34d399;
         --accent-green-hover: #2bb386;
         --accent-purple: #8b5cf6;
-        --accent-red: #ef4444;
         --accent-orange: #f59e0b;
         --shadow-color: rgba(0, 0, 0, 0.5);
         --highlight-yellow: #fbbf24;
@@ -72,10 +103,7 @@ st.markdown("""
         --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    * {
-        box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent;
-    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
     .main .block-container {
         padding: 0.5rem 0.8rem 5rem 0.8rem;
@@ -83,10 +111,7 @@ st.markdown("""
         max-width: 100% !important;
     }
 
-    .stApp {
-        background: var(--bg-primary);
-    }
-
+    .stApp { background: var(--bg-primary); }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -120,10 +145,7 @@ st.markdown("""
         gap: 0.5rem;
     }
 
-    .app-logo-icon {
-        font-size: 1.5rem;
-    }
-
+    .app-logo-icon { font-size: 1.5rem; }
     .app-logo-text {
         font-size: 1.1rem;
         font-weight: 700;
@@ -323,9 +345,7 @@ st.markdown("""
         animation: fadeIn 0.4s ease-out;
     }
 
-    .site-card:active {
-        transform: scale(0.98);
-    }
+    .site-card:active { transform: scale(0.98); }
 
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(12px); }
@@ -453,9 +473,7 @@ st.markdown("""
         gap: 0.4rem;
     }
 
-    .action-btn:active {
-        transform: scale(0.95);
-    }
+    .action-btn:active { transform: scale(0.95); }
 
     .btn-map {
         background: var(--accent-blue);
@@ -496,18 +514,13 @@ st.markdown("""
         margin: 1rem 0;
     }
 
-    .welcome-icon {
-        font-size: 3.5rem;
-        margin-bottom: 0.8rem;
-    }
-
+    .welcome-icon { font-size: 3.5rem; margin-bottom: 0.8rem; }
     .welcome-title {
         font-size: 1.4rem;
         font-weight: 700;
         color: var(--text-primary);
         margin-bottom: 0.3rem;
     }
-
     .welcome-subtitle {
         color: var(--text-secondary);
         font-size: 0.9rem;
@@ -515,7 +528,6 @@ st.markdown("""
         margin: 0 auto;
         line-height: 1.5;
     }
-
     .welcome-hint {
         color: var(--text-muted);
         font-size: 0.8rem;
@@ -563,17 +575,9 @@ st.markdown("""
         min-width: 50px;
     }
 
-    .nav-item .nav-icon {
-        font-size: 1.2rem;
-    }
-
-    .nav-item.active {
-        color: var(--accent-blue);
-    }
-
-    .nav-item:active {
-        transform: scale(0.9);
-    }
+    .nav-item .nav-icon { font-size: 1.2rem; }
+    .nav-item.active { color: var(--accent-blue); }
+    .nav-item:active { transform: scale(0.9); }
 
     /* ========================================
        SEARCH HIGHLIGHT
@@ -601,22 +605,15 @@ st.markdown("""
             margin: -0.5rem -2rem 1.5rem -2rem;
         }
 
-        .app-logo-text {
-            font-size: 1.3rem;
-        }
+        .app-logo-text { font-size: 1.3rem; }
 
         .stats-grid {
             grid-template-columns: repeat(4, 1fr);
             gap: 1rem;
         }
 
-        .stat-number {
-            font-size: 1.8rem;
-        }
-
-        .stat-card {
-            padding: 1.2rem;
-        }
+        .stat-number { font-size: 1.8rem; }
+        .stat-card { padding: 1.2rem; }
 
         .site-card {
             padding: 1.5rem;
@@ -630,17 +627,9 @@ st.markdown("""
             box-shadow: 0 8px 30px var(--shadow-color);
         }
 
-        .site-name {
-            font-size: 1.2rem;
-        }
-
-        .site-details {
-            grid-template-columns: repeat(3, 1fr);
-        }
-
-        .site-actions {
-            gap: 0.8rem;
-        }
+        .site-name { font-size: 1.2rem; }
+        .site-details { grid-template-columns: repeat(3, 1fr); }
+        .site-actions { gap: 0.8rem; }
 
         .action-btn {
             flex: 0 1 auto;
@@ -649,39 +638,17 @@ st.markdown("""
             font-size: 0.85rem;
         }
 
-        .action-btn:hover {
-            transform: translateY(-2px);
-        }
+        .action-btn:hover { transform: translateY(-2px); }
+        .btn-map:hover { box-shadow: 0 4px 15px rgba(79, 140, 247, 0.3); }
+        .btn-call:hover { box-shadow: 0 4px 15px rgba(52, 211, 153, 0.3); }
 
-        .btn-map:hover {
-            box-shadow: 0 4px 15px rgba(79, 140, 247, 0.3);
-        }
+        .welcome-screen { padding: 4rem 2rem; }
+        .welcome-icon { font-size: 5rem; }
+        .welcome-title { font-size: 2rem; }
+        .welcome-subtitle { font-size: 1.1rem; }
 
-        .btn-call:hover {
-            box-shadow: 0 4px 15px rgba(52, 211, 153, 0.3);
-        }
-
-        .welcome-screen {
-            padding: 4rem 2rem;
-        }
-
-        .welcome-icon {
-            font-size: 5rem;
-        }
-        .welcome-title {
-            font-size: 2rem;
-        }
-        .welcome-subtitle {
-            font-size: 1.1rem;
-        }
-
-        .bottom-nav {
-            display: none;
-        }
-
-        .search-section {
-            padding: 1.5rem;
-        }
+        .bottom-nav { display: none; }
+        .search-section { padding: 1.5rem; }
 
         .search-input-wrapper input {
             padding: 0.8rem 0.8rem 0.8rem 3rem;
@@ -699,48 +666,26 @@ st.markdown("""
        TABLET
        ======================================== */
     @media (min-width: 481px) and (max-width: 768px) {
-        .stats-grid {
-            grid-template-columns: repeat(4, 1fr);
-        }
-
-        .site-details {
-            grid-template-columns: repeat(2, 1fr);
-        }
-
-        .bottom-nav .nav-item {
-            font-size: 0.6rem;
-        }
-        .bottom-nav .nav-item .nav-icon {
-            font-size: 1.3rem;
-        }
+        .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        .site-details { grid-template-columns: repeat(2, 1fr); }
+        .bottom-nav .nav-item { font-size: 0.6rem; }
+        .bottom-nav .nav-item .nav-icon { font-size: 1.3rem; }
     }
 
     /* ========================================
        SMALL PHONE
        ======================================== */
     @media (max-width: 380px) {
-        .app-logo-text {
-            font-size: 0.9rem;
-        }
-        .app-logo-badge {
-            font-size: 0.5rem;
-            padding: 0.1rem 0.4rem;
-        }
-        .nav-btn {
-            font-size: 0.65rem;
-            padding: 0.3rem 0.6rem;
-        }
+        .app-logo-text { font-size: 0.9rem; }
+        .app-logo-badge { font-size: 0.5rem; padding: 0.1rem 0.4rem; }
+        .nav-btn { font-size: 0.65rem; padding: 0.3rem 0.6rem; }
         .search-btn, .clear-btn {
             font-size: 0.7rem;
             padding: 0.6rem 0.7rem;
             min-width: 50px;
         }
-        .site-name {
-            font-size: 0.9rem;
-        }
-        .site-details {
-            grid-template-columns: 1fr 1fr;
-        }
+        .site-name { font-size: 0.9rem; }
+        .site-details { grid-template-columns: 1fr 1fr; }
         .action-btn {
             min-width: 70px;
             font-size: 0.65rem;
@@ -760,7 +705,7 @@ def load_excel_data(file_path):
         if not os.path.exists(file_path):
             return None
         df = pd.read_excel(file_path, engine='openpyxl')
-        df.columns = df.columns.str.strip()
+        # Keep original column names (don't strip)
         return df
     except Exception as e:
         st.error(f"❌ Error loading file: {str(e)}")
@@ -771,24 +716,24 @@ def safe_str(val):
         return ""
     return str(val)
 
-def get_column_value(row, column_name, default=""):
-    """Safely get value from a column, handling different column name formats"""
-    if column_name in row:
-        return safe_str(row[column_name])
+def get_column_value(row_dict, column_name, default=""):
+    """
+    Safely get value from a row dictionary.
+    Handles both exact column names and variations.
+    """
+    if column_name in row_dict:
+        val = row_dict[column_name]
+        return safe_str(val)
     
-    # Try variations of the column name
-    variations = [
-        column_name,
-        column_name.upper(),
-        column_name.lower(),
-        column_name.replace('_', ' '),
-        column_name.replace(' ', '_'),
-    ]
+    # Try case-insensitive match
+    for key in row_dict.keys():
+        if key.strip().upper() == column_name.strip().upper():
+            return safe_str(row_dict[key])
     
-    for col in row.index:
-        for var in variations:
-            if col.strip().upper() == var.strip().upper():
-                return safe_str(row[col])
+    # Try contains match
+    for key in row_dict.keys():
+        if column_name.strip().upper() in key.strip().upper():
+            return safe_str(row_dict[key])
     
     return default
 
@@ -836,27 +781,32 @@ def perform_intelligent_search(df, search_input):
         final_mask |= term_mask
     return df[final_mask].copy()
 
-def create_site_card_html(row, search_term=""):
+def create_site_card_html(row_dict, search_term=""):
     """Create HTML for a site card with the correct column mappings"""
     
     # Get values using the correct column names
-    plaid = get_column_value(row, 'PLAID')
-    site = get_column_value(row, 'SITE')
-    region = get_column_value(row, 'REGION')
-    province = get_column_value(row, 'PROVINCE')
-    municipality = get_column_value(row, 'MUNICIPALITY')
-    barangay = get_column_value(row, 'BARANGAY')
-    territory = get_column_value(row, 'TERRITORY')
-    lat = get_column_value(row, 'LATITUDE')
-    lon = get_column_value(row, 'LONGITUDE')
-    site_add = get_column_value(row, 'SITE_ADD')
-    assigned_hub = get_column_value(row, 'ASSIGNED_HUB')
-    towerco = get_column_value(row, 'TOWERCO')
+    plaid = get_column_value(row_dict, 'PLAID')
+    site = get_column_value(row_dict, 'SITE')
+    region = get_column_value(row_dict, 'REGION')
+    province = get_column_value(row_dict, 'PROVINCE')
+    municipality = get_column_value(row_dict, 'MUNICIPALITY')
+    barangay = get_column_value(row_dict, 'BARANGAY')
+    territory = get_column_value(row_dict, 'TERRITORY')
+    lat = get_column_value(row_dict, 'LATITUDE')
+    lon = get_column_value(row_dict, 'LONGITUDE')
+    site_add = get_column_value(row_dict, 'SITE_ADD')
+    assigned_hub = get_column_value(row_dict, 'ASSIGN_HUB')  # Column: ASSIGN_HUB
+    towerco = get_column_value(row_dict, 'TOWERCO')
     
     # CRITICAL: These are the correctly mapped columns
-    new_assign_hub = get_column_value(row, 'NEW ASSIGN HUB')  # Column M - GLOBE HUB
-    fo_onsite = get_column_value(row, 'NEW ENGINEER_ANM1')     # Column S - FO ONSITE
-    contact = get_column_value(row, 'CONTACT NUMBER')          # Column U - FO NUMBER
+    new_assign_hub = get_column_value(row_dict, 'NEW ASSIGN HUB')  # Column: NEW ASSIGN_HUB - GLOBE HUB
+    fo_onsite = get_column_value(row_dict, 'NEW ENGINEER_ANM1')     # Column: NEW ENGINEER_ANM1 - FO ONSITE
+    contact = get_column_value(row_dict, 'CONTACT NUMBER')          # Column: CONTACT NUMBER - FO NUMBER
+    
+    # Additional fields
+    new_engineer_ah = get_column_value(row_dict, 'NEW ENGINEER_AH')
+    new_anm_head = get_column_value(row_dict, 'NEW ANM HEAD')
+    new_roh = get_column_value(row_dict, 'NEW ROH')
     
     # For display names
     hub_display = new_assign_hub if new_assign_hub else "Not assigned"
@@ -919,8 +869,16 @@ def create_site_card_html(row, search_term=""):
                 <span class="detail-value highlight">{hub_display_highlighted}</span>
             </div>
             <div class="detail-item">
-                <span class="detail-label">Assigned Hub</span>
+                <span class="detail-label">📋 ASSIGN HUB</span>
                 <span class="detail-value">{assigned_hub}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">📞 FO NUMBER</span>
+                <span class="detail-value">{contact_display}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">👤 AH</span>
+                <span class="detail-value">{new_engineer_ah if new_engineer_ah else "N/A"}</span>
             </div>
         </div>
         <div class="site-actions">
@@ -1032,11 +990,22 @@ def create_pdf_export(df, selected_indices):
         content.append(Spacer(1, 10))
         
         selected_df = df.iloc[selected_indices]
-        table_data = [['PLAID', 'Site', 'Region', 'FO Onsite', 'Globe Hub', 'Contact', 'Latitude', 'Longitude']]
+        
+        # Get all column names from the dataframe
+        all_columns = selected_df.columns.tolist()
+        
+        # Create header with available columns
+        header = ['PLAID', 'SITE', 'REGION', 'FO ONSITE', 'GLOBE HUB', 'CONTACT', 'LATITUDE', 'LONGITUDE']
+        table_data = [header]
         
         for idx, row in selected_df.iterrows():
-            lat_val = get_column_value(row, 'LATITUDE')
-            lon_val = get_column_value(row, 'LONGITUDE')
+            row_dict = row.to_dict()
+            fo_onsite = get_column_value(row_dict, 'NEW ENGINEER_ANM1')
+            globe_hub = get_column_value(row_dict, 'NEW ASSIGN HUB')
+            contact = get_column_value(row_dict, 'CONTACT NUMBER')
+            lat_val = get_column_value(row_dict, 'LATITUDE')
+            lon_val = get_column_value(row_dict, 'LONGITUDE')
+            
             try:
                 if lat_val and lon_val:
                     lat_val = f"{float(lat_val):.6f}"
@@ -1044,14 +1013,10 @@ def create_pdf_export(df, selected_indices):
             except:
                 pass
             
-            fo_onsite = get_column_value(row, 'NEW ENGINEER_ANM1')
-            globe_hub = get_column_value(row, 'NEW ASSIGN HUB')
-            contact = get_column_value(row, 'CONTACT NUMBER')
-            
             table_data.append([
-                get_column_value(row, 'PLAID'),
-                get_column_value(row, 'SITE'),
-                get_column_value(row, 'REGION'),
+                get_column_value(row_dict, 'PLAID'),
+                get_column_value(row_dict, 'SITE'),
+                get_column_value(row_dict, 'REGION'),
                 fo_onsite if fo_onsite else 'No FO assigned',
                 globe_hub if globe_hub else 'Not assigned',
                 contact if contact else 'No contact',
@@ -1284,17 +1249,21 @@ def show_main():
         # Count FO Onsite and Hub availability
         fo_count = 0
         hub_count = 0
+        contact_count = 0
         for _, row in search_results_df.iterrows():
-            if get_column_value(row, 'NEW ENGINEER_ANM1'):
+            row_dict = row.to_dict()
+            if get_column_value(row_dict, 'NEW ENGINEER_ANM1'):
                 fo_count += 1
-            if get_column_value(row, 'NEW ASSIGN HUB'):
+            if get_column_value(row_dict, 'NEW ASSIGN HUB'):
                 hub_count += 1
+            if get_column_value(row_dict, 'CONTACT NUMBER'):
+                contact_count += 1
         
         stats = {
             'total': len(search_results_df),
             'regions': search_results_df['REGION'].nunique() if 'REGION' in search_results_df.columns else 0,
             'coords': search_results_df['LATITUDE'].notna().sum() if 'LATITUDE' in search_results_df.columns else 0,
-            'contacts': search_results_df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in search_results_df.columns else 0,
+            'contacts': contact_count,
             'fo_onsite': fo_count,
             'globe_hub': hub_count,
         }
@@ -1364,17 +1333,21 @@ def show_main():
         # Count FO Onsite and Hub availability
         fo_count = 0
         hub_count = 0
+        contact_count = 0
         for _, row in df.iterrows():
-            if get_column_value(row, 'NEW ENGINEER_ANM1'):
+            row_dict = row.to_dict()
+            if get_column_value(row_dict, 'NEW ENGINEER_ANM1'):
                 fo_count += 1
-            if get_column_value(row, 'NEW ASSIGN HUB'):
+            if get_column_value(row_dict, 'NEW ASSIGN HUB'):
                 hub_count += 1
+            if get_column_value(row_dict, 'CONTACT NUMBER'):
+                contact_count += 1
         
         stats = {
             'total': len(df),
             'regions': df['REGION'].nunique() if 'REGION' in df.columns else 0,
             'coords': df['LATITUDE'].notna().sum() if 'LATITUDE' in df.columns else 0,
-            'contacts': df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in df.columns else 0,
+            'contacts': contact_count,
             'fo_onsite': fo_count,
             'globe_hub': hub_count,
         }
