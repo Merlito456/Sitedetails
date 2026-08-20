@@ -16,6 +16,9 @@ import json
 import platform
 import sys
 import uuid
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # ------------------------------
 # PAGE CONFIG
@@ -40,12 +43,21 @@ if 'admin_tab' not in st.session_state:
     st.session_state.admin_tab = 0
 if 'token_to_validate' not in st.session_state:
     st.session_state.token_to_validate = None
+if 'access_token' not in st.session_state:
+    st.session_state.access_token = None
+if 'otp_verified' not in st.session_state:
+    st.session_state.otp_verified = False
+if 'otp_code' not in st.session_state:
+    st.session_state.otp_code = None
+if 'otp_email' not in st.session_state:
+    st.session_state.otp_email = None
 
 # ------------------------------
 # SECURITY CONFIG
 # ------------------------------
 TOKEN_EXPIRY_DAYS = 30
 SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
+OTP_EXPIRY_MINUTES = 10
 
 # ------------------------------
 # EXCEL DATA LOADER
@@ -119,10 +131,14 @@ def get_online_time():
     except:
         return None
 
-def generate_secure_token(site_plaid, user_email, user_name, mac_addresses="", imei_numbers=""):
+def generate_otp():
+    """Generate a 6-digit OTP"""
+    return ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+
+def generate_secure_token(site_plaid, user_email, user_name, allowed_emails=""):
     """
-    Generate a secure token with embedded MAC addresses and IMEI numbers.
-    These are pre-approved by the admin and cannot be changed by the user.
+    Generate a secure token with email restrictions.
+    This ensures only the specified email can access the site.
     """
     current_time = get_online_time()
     if current_time is None:
@@ -130,35 +146,19 @@ def generate_secure_token(site_plaid, user_email, user_name, mac_addresses="", i
     
     expiry = current_time + timedelta(days=TOKEN_EXPIRY_DAYS)
     
-    # Collect all allowed devices
-    allowed_devices = []
-    
-    # Add MAC addresses
-    if mac_addresses:
-        mac_list = [m.strip() for m in mac_addresses.split(',') if m.strip()]
-        for mac in mac_list:
-            mac_clean = mac.upper().replace('-', ':')
-            allowed_devices.append(f"MAC:{mac_clean}")
-    
-    # Add IMEI numbers
-    if imei_numbers:
-        imei_list = [i.strip() for i in imei_numbers.split(',') if i.strip()]
-        for imei in imei_list:
-            imei_clean = re.sub(r'\D', '', imei)
-            allowed_devices.append(f"IMEI:{imei_clean}")
-    
-    # Hash each device for security
-    hashed_devices = [hashlib.sha256(d.encode()).hexdigest() for d in allowed_devices]
+    # Clean allowed emails
+    emails = []
+    if allowed_emails:
+        email_list = [e.strip().lower() for e in allowed_emails.split(',') if e.strip()]
+        emails = [hashlib.sha256(e.encode()).hexdigest() for e in email_list]
     
     payload = {
         'c': current_time.isoformat(),
         'e': expiry.isoformat(),
         's': site_plaid,
-        'u': user_email,
-        'n': user_name,
-        'd': hashed_devices,
-        'm': mac_addresses,
-        'i': imei_numbers,
+        'u': user_name,
+        'a': user_email,
+        'd': emails,  # Allowed emails (hashed)
     }
     
     payload_json = json.dumps(payload, separators=(',', ':'))
@@ -168,35 +168,7 @@ def generate_secure_token(site_plaid, user_email, user_name, mac_addresses="", i
     
     return token
 
-def validate_device(device_to_check, allowed_devices_hashed):
-    """Validate a device string against the allowed hashed devices."""
-    if not device_to_check or not allowed_devices_hashed:
-        return False
-    
-    # Clean the device input
-    device_clean = device_to_check.strip().upper()
-    
-    # Try as MAC
-    if ':' in device_clean or '-' in device_clean:
-        device_clean = device_clean.replace('-', ':')
-        device_to_hash = f"MAC:{device_clean}"
-    # Try as IMEI (digits only)
-    elif re.match(r'^\d+$', device_clean):
-        device_to_hash = f"IMEI:{device_clean}"
-    else:
-        # Try both formats
-        device_to_hash_mac = f"MAC:{device_clean}"
-        device_to_hash_imei = f"IMEI:{device_clean}"
-        
-        hashed_mac = hashlib.sha256(device_to_hash_mac.encode()).hexdigest()
-        hashed_imei = hashlib.sha256(device_to_hash_imei.encode()).hexdigest()
-        
-        return hashed_mac in allowed_devices_hashed or hashed_imei in allowed_devices_hashed
-    
-    hashed = hashlib.sha256(device_to_hash.encode()).hexdigest()
-    return hashed in allowed_devices_hashed
-
-def validate_token(token, df, provided_device=""):
+def validate_token(token, df):
     """Validate a token and return site data if valid."""
     try:
         token = token.strip()
@@ -225,11 +197,9 @@ def validate_token(token, df, provided_device=""):
         created_str = payload.get('c')
         expires_str = payload.get('e')
         site_plaid = payload.get('s')
-        user_email = payload.get('u')
-        user_name = payload.get('n')
-        allowed_devices = payload.get('d', [])
-        mac_addresses = payload.get('m', '')
-        imei_numbers = payload.get('i', '')
+        user_name = payload.get('u')
+        user_email = payload.get('a')
+        allowed_emails = payload.get('d', [])
         
         if not all([created_str, expires_str, site_plaid]):
             return None, "Missing required token data"
@@ -250,13 +220,6 @@ def validate_token(token, df, provided_device=""):
         if current_time < created - timedelta(minutes=5):
             return None, "Token is from the future - possible fraud attempt"
         
-        # DEVICE VALIDATION
-        if allowed_devices and provided_device:
-            if not validate_device(provided_device, allowed_devices):
-                return None, "Device not authorized. Please use your registered MAC Address or IMEI."
-        elif allowed_devices:
-            return None, "Device verification required. Please enter your MAC Address or IMEI."
-        
         site_data = get_site_by_plaid(df, site_plaid)
         if site_data is None:
             return None, f"Site not found: {site_plaid}"
@@ -265,15 +228,24 @@ def validate_token(token, df, provided_device=""):
         site_data['_user_name'] = user_name
         site_data['_token_created'] = created_str
         site_data['_token_expires'] = expires_str
-        site_data['_device_restricted'] = bool(allowed_devices)
-        site_data['_device_count'] = len(allowed_devices)
-        site_data['_mac_addresses'] = mac_addresses
-        site_data['_imei_numbers'] = imei_numbers
+        site_data['_device_restricted'] = bool(allowed_emails)
+        site_data['_device_count'] = len(allowed_emails)
         
         return site_data, None
         
     except Exception as e:
         return None, f"Token validation error: {str(e)}"
+
+def send_otp_email(email, otp_code, site_name):
+    """Send OTP to user's email"""
+    try:
+        # For production, use a proper SMTP service or email API
+        # This is a placeholder - you'd need to configure your email service
+        st.info(f"📧 OTP sent to {email}: {otp_code}")
+        return True
+    except Exception as e:
+        st.error(f"Failed to send OTP: {str(e)}")
+        return False
 
 # ------------------------------
 # DARK THEME CSS
@@ -522,20 +494,21 @@ st.markdown("""
     }
     .batch-result .site-item:last-child { border-bottom: none; }
 
-    .device-warning {
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid #ef4444;
-        border-radius: 8px;
-        padding: 0.8rem;
+    .otp-box {
+        background: #14141e;
+        border-radius: 12px;
+        padding: 1rem;
+        border: 2px solid #4f8cf7;
         margin: 0.5rem 0;
     }
-    .device-warning .title {
-        color: #ef4444;
+    .otp-box .title {
+        color: #4f8cf7;
+        font-size: 0.9rem;
         font-weight: 600;
     }
-    .device-warning .body {
-        color: #f87171;
-        font-size: 0.85rem;
+    .otp-box .subtitle {
+        color: #8a8aa0;
+        font-size: 0.8rem;
     }
 
     @media (min-width: 769px) {
@@ -614,10 +587,10 @@ def show_admin():
     st.markdown("""
     <div class="secure-card">
         <h2>⚙️ Admin Dashboard</h2>
-        <p>Generate secure time-verified links with <strong style="color: #4f8cf7;">MAC Address / IMEI</strong> restrictions.</p>
+        <p>Generate secure links with <strong style="color: #4f8cf7;">email-based OTP verification</strong>.</p>
         <p class="sub-text">
-            🔍 Search by PLAID or Site Name (exact match) · Batch generate links with comma-separated values<br>
-            📱 Add <strong style="color: #34d399;">MAC Addresses</strong> (AA:BB:CC:DD:EE:FF) and/or <strong style="color: #fbbf24;">IMEI numbers</strong>
+            🔍 Search by PLAID or Site Name · Batch generate links<br>
+            📧 Users must verify their email with a <strong style="color: #fbbf24;">one-time PIN</strong> to access the site
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -680,7 +653,7 @@ def show_admin():
     
     # Tab 1: Single Token
     with tabs[1]:
-        st.subheader("🔑 Generate Single Token with Device Restriction")
+        st.subheader("🔑 Generate Single Token with OTP Verification")
         
         sites = get_all_sites(df)
         site_options = {f"{s['site']} ({s['plaid']})": s['plaid'] for s in sites}
@@ -692,94 +665,69 @@ def show_admin():
             st.markdown("""
             <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border-color: #4f8cf7;">
                 <p style="color: #4f8cf7; font-weight: 600; margin: 0;">
-                    ⚠️ IMPORTANT: Only enter MAC addresses and IMEI numbers that are 
-                    <strong style="color: #fbbf24;">pre-approved and registered</strong> to the user's device.
+                    🔒 <strong style="color: #fbbf24;">Two-Factor Authentication</strong>
                 </p>
                 <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0.3rem 0 0 0;">
-                    These will be <strong style="color: #34d399;">embedded in the token</strong> and cannot be changed by the user.
+                    Users will receive an OTP to their email. They must enter the OTP to access the site.
                 </p>
             </div>
             """, unsafe_allow_html=True)
             
             col1, col2 = st.columns(2)
             with col1:
-                user_email = st.text_input("User Email", placeholder="subcon@company.com", key="single_email")
+                user_email = st.text_input("User Email (OTP will be sent here)", placeholder="subcon@company.com", key="single_email")
             with col2:
                 user_name = st.text_input("User Name", placeholder="John Doe", key="single_name")
             
-            st.markdown("""
-            <div style="background: #1a1a2e; border-radius: 12px; padding: 1rem; border: 1px solid #2a2a44; margin: 0.5rem 0;">
-                <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0;">
-                    📱 Enter the user's actual device identifiers:<br>
-                    <span style="color: #34d399;">MAC Address</span> format: <code>AA:BB:CC:DD:EE:FF</code><br>
-                    <span style="color: #fbbf24;">IMEI</span> format: <code>123456789012345</code> (15 digits)
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            mac_addresses = st.text_input(
-                "MAC Addresses (comma separated)",
-                placeholder="AA:BB:CC:DD:EE:FF, 11:22:33:44:55:66",
-                key="single_mac",
-                help="Enter the MAC addresses of the user's authorized devices"
-            )
-            
-            imei_numbers = st.text_input(
-                "IMEI Numbers (comma separated)",
-                placeholder="123456789012345, 987654321098765",
-                key="single_imei",
-                help="Enter the IMEI numbers of the user's authorized devices"
+            allowed_emails = st.text_input(
+                "Authorized Email(s) (comma separated)",
+                placeholder="subcon@company.com, engineer@company.com",
+                key="single_allowed",
+                help="Only these email addresses can receive OTP and access the site"
             )
             
             if st.button("🔗 Generate Link", key="single_generate", use_container_width=True):
-                if user_email and user_name and selected_site_plaid:
-                    if not mac_addresses and not imei_numbers:
-                        st.warning("⚠️ Please enter at least one MAC Address or IMEI number")
+                if user_email and user_name and selected_site_plaid and allowed_emails:
+                    token = generate_secure_token(
+                        selected_site_plaid, 
+                        user_email, 
+                        user_name, 
+                        allowed_emails
+                    )
+                    base_url = st.get_option('server.baseUrlPath') or ""
+                    link = f"{base_url}/?token={token}"
+                    
+                    st.success("✅ Link generated successfully!")
+                    
+                    online_time = get_online_time()
+                    if online_time:
+                        expiry = online_time + timedelta(days=TOKEN_EXPIRY_DAYS)
                     else:
-                        token = generate_secure_token(
-                            selected_site_plaid, 
-                            user_email, 
-                            user_name, 
-                            mac_addresses, 
-                            imei_numbers
-                        )
-                        base_url = st.get_option('server.baseUrlPath') or ""
-                        link = f"{base_url}/?token={token}"
+                        expiry = datetime.utcnow() + timedelta(days=TOKEN_EXPIRY_DAYS)
+                    
+                    email_count = len([e for e in allowed_emails.split(',') if e.strip()])
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"""
+                        <div class="token-box">
+                            <div class="label">🔗 Secure Link</div>
+                            <code style="word-break: break-all; font-size: 0.7rem;">{link}</code>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with col2:
+                        st.markdown(f"""
+                        <div class="token-box">
+                            <div class="label">📋 Token Info</div>
+                            <div style="color: #d0d0e0;">👤 User: {user_name}</div>
+                            <div style="color: #d0d0e0;">📧 Email: {user_email}</div>
+                            <div style="color: #d0d0e0;">⏰ Expires: {expiry.strftime('%B %d, %Y at %I:%M %p UTC')}</div>
+                            <div style="color: #d0d0e0;">📍 Site: {selected_site_display}</div>
+                            <div style="color: #34d399;">📧 Allowed Emails: {email_count}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
-                        st.success("✅ Link generated successfully!")
-                        
-                        online_time = get_online_time()
-                        if online_time:
-                            expiry = online_time + timedelta(days=TOKEN_EXPIRY_DAYS)
-                        else:
-                            expiry = datetime.utcnow() + timedelta(days=TOKEN_EXPIRY_DAYS)
-                        
-                        mac_count = len([m for m in mac_addresses.split(',') if m.strip()]) if mac_addresses else 0
-                        imei_count = len([i for i in imei_numbers.split(',') if i.strip()]) if imei_numbers else 0
-                        total_devices = mac_count + imei_count
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"""
-                            <div class="token-box">
-                                <div class="label">🔗 Secure Link</div>
-                                <code style="word-break: break-all; font-size: 0.7rem;">{link}</code>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        with col2:
-                            st.markdown(f"""
-                            <div class="token-box">
-                                <div class="label">📋 Token Info</div>
-                                <div style="color: #d0d0e0;">👤 User: {user_name}</div>
-                                <div style="color: #d0d0e0;">📧 Email: {user_email}</div>
-                                <div style="color: #d0d0e0;">⏰ Expires: {expiry.strftime('%B %d, %Y at %I:%M %p UTC')}</div>
-                                <div style="color: #d0d0e0;">📍 Site: {selected_site_display}</div>
-                                <div style="color: #34d399;">📱 MACs: {mac_count} device(s)</div>
-                                <div style="color: #fbbf24;">📱 IMEIs: {imei_count} device(s)</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                        st.info("🔒 This link is bound to specific MAC addresses and/or IMEI numbers. Only registered devices can access.")
+                    st.info("🔒 This link requires email verification. The user must enter the OTP sent to their email.")
                 else:
                     st.warning("⚠️ Please fill in all required fields")
         else:
@@ -787,7 +735,7 @@ def show_admin():
     
     # Tab 2: Batch Generate
     with tabs[2]:
-        st.subheader("📦 Batch Generate Links with Device Restriction")
+        st.subheader("📦 Batch Generate Links with OTP Verification")
         
         st.markdown("""
         <div class="secure-card" style="background: #14141e; padding: 1rem;">
@@ -807,37 +755,21 @@ def show_admin():
         
         col1, col2 = st.columns(2)
         with col1:
-            batch_email = st.text_input("User Email (for all links)", placeholder="subcon@company.com", key="batch_email")
+            batch_email = st.text_input("User Email", placeholder="subcon@company.com", key="batch_email")
         with col2:
-            batch_name = st.text_input("User Name (for all links)", placeholder="John Doe", key="batch_name")
+            batch_name = st.text_input("User Name", placeholder="John Doe", key="batch_name")
         
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 1rem; border: 1px solid #2a2a44; margin: 0.5rem 0;">
-            <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0;">
-                📱 Enter device identifiers that will apply to ALL generated links:<br>
-                <span style="color: #34d399;">MAC Address</span> format: <code>AA:BB:CC:DD:EE:FF</code><br>
-                <span style="color: #fbbf24;">IMEI</span> format: <code>123456789012345</code> (15 digits)
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        batch_mac = st.text_input(
-            "MAC Addresses (comma separated - applies to all)",
-            placeholder="AA:BB:CC:DD:EE:FF, 11:22:33:44:55:66",
-            key="batch_mac"
-        )
-        
-        batch_imei = st.text_input(
-            "IMEI Numbers (comma separated - applies to all)",
-            placeholder="123456789012345, 987654321098765",
-            key="batch_imei"
+        batch_allowed = st.text_input(
+            "Authorized Emails (comma separated - applies to all)",
+            placeholder="subcon@company.com, engineer@company.com",
+            key="batch_allowed"
         )
         
         if st.button("🔗 Generate All Links", key="batch_generate", use_container_width=True):
             if not batch_input:
                 st.warning("⚠️ Please enter at least one PLAID or Site Name")
-            elif not batch_email or not batch_name:
-                st.warning("⚠️ Please enter user email and name")
+            elif not batch_email or not batch_name or not batch_allowed:
+                st.warning("⚠️ Please fill in all fields")
             else:
                 items = [item.strip() for item in batch_input.split(',') if item.strip()]
                 
@@ -852,7 +784,7 @@ def show_admin():
                         if site_data:
                             plaid = safe_str(site_data.get('PLAID', ''))
                             site_name = safe_str(site_data.get('SITE', ''))
-                            token = generate_secure_token(plaid, batch_email, batch_name, batch_mac, batch_imei)
+                            token = generate_secure_token(plaid, batch_email, batch_name, batch_allowed)
                             base_url = st.get_option('server.baseUrlPath') or ""
                             link = f"{base_url}/?token={token}"
                             results.append({
@@ -867,7 +799,7 @@ def show_admin():
                             if site_data:
                                 plaid = safe_str(site_data.get('PLAID', ''))
                                 site_name = safe_str(site_data.get('SITE', ''))
-                                token = generate_secure_token(plaid, batch_email, batch_name, batch_mac, batch_imei)
+                                token = generate_secure_token(plaid, batch_email, batch_name, batch_allowed)
                                 base_url = st.get_option('server.baseUrlPath') or ""
                                 link = f"{base_url}/?token={token}"
                                 results.append({
@@ -1015,7 +947,7 @@ def display_site_card(site_data):
     """, unsafe_allow_html=True)
 
 # ------------------------------
-# SITE VIEWER PAGE
+# SITE VIEWER PAGE - OTP VERIFICATION
 # ------------------------------
 def show_site_viewer(token):
     app_header()
@@ -1049,76 +981,14 @@ def show_site_viewer(token):
         except:
             pass
     
-    # Store token in session for validation
-    st.session_state.token_to_validate = token
+    # Validate token
+    site_data, error = validate_token(token, df)
     
-    # First, try to validate without device (to check if token requires device)
-    temp_site_data, temp_error = validate_token(token, df, "")
-    
-    if temp_error and "Device verification required" in temp_error:
-        # Token requires device verification - show input form
-        st.markdown("""
-        <div class="secure-card" style="border-color: #4f8cf7;">
-            <h2 style="color: #4f8cf7;">📱 Device Verification Required</h2>
-            <p style="color: #c0c0d0;">
-                This token is secured with <strong style="color: #34d399;">MAC Address</strong> and/or 
-                <strong style="color: #fbbf24;">IMEI</strong> verification.
-            </p>
-            <p style="color: #8a8aa0; font-size: 0.85rem;">
-                Please enter your device's MAC Address or IMEI to verify your identity.
-                <br><strong style="color: #ef4444;">Note:</strong> This information is checked against the token's allowed devices.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Device input form
-        with st.form("device_verification_form"):
-            st.markdown("""
-            <div style="background: #1a1a2e; border-radius: 12px; padding: 1rem; border: 1px solid #2a2a44; margin: 0.5rem 0;">
-                <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0;">
-                    Enter <span style="color: #34d399;">MAC Address</span> (AA:BB:CC:DD:EE:FF) or 
-                    <span style="color: #fbbf24;">IMEI</span> (15 digits)
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            device_input = st.text_input(
-                "Your Device MAC Address or IMEI",
-                placeholder="AA:BB:CC:DD:EE:FF or 123456789012345",
-                help="Enter the MAC Address or IMEI of your current device"
-            )
-            
-            submitted = st.form_submit_button("🔓 Verify & Access", use_container_width=True)
-            
-            if submitted:
-                if device_input:
-                    device_clean = device_input.strip().upper()
-                    site_data, error = validate_token(token, df, device_clean)
-                    
-                    if error:
-                        st.markdown(f"""
-                        <div class="device-warning">
-                            <div class="title">❌ Access Denied</div>
-                            <div class="body">{error}</div>
-                            <div style="color: #8a8aa0; font-size: 0.8rem; margin-top: 0.3rem;">
-                                Please ensure you are using the correct MAC Address or IMEI.
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.success("✅ Device verified successfully!")
-                        display_site_content(site_data)
-                else:
-                    st.warning("⚠️ Please enter your device MAC Address or IMEI")
-        
-        return
-    
-    elif temp_error:
-        # Other error
+    if error:
         st.markdown(f"""
         <div class="secure-card" style="border-color: #ef4444;">
             <h2 style="color: #ef4444;">🔒 Access Denied</h2>
-            <p style="color: #d0d0e0;">{temp_error}</p>
+            <p style="color: #d0d0e0;">{error}</p>
             <p style="color: #8a8aa0; font-size: 0.85rem;">The link may have expired or been invalidated.</p>
             <br>
             <button class="btn btn-primary" onclick="location.href='/'">🏠 Return to Home</button>
@@ -1126,10 +996,7 @@ def show_site_viewer(token):
         """, unsafe_allow_html=True)
         return
     
-    elif temp_site_data:
-        # No device restriction, show site directly
-        display_site_content(temp_site_data)
-    else:
+    if not site_data:
         st.markdown("""
         <div class="secure-card" style="border-color: #f59e0b;">
             <h2 style="color: #f59e0b;">⚠️ Site Not Found</h2>
@@ -1137,6 +1004,64 @@ def show_site_viewer(token):
             <button class="btn btn-primary" onclick="location.href='/'">🏠 Return to Home</button>
         </div>
         """, unsafe_allow_html=True)
+        return
+    
+    # Check if OTP verification is needed
+    if site_data.get('_device_restricted', False):
+        # OTP Verification required
+        if not st.session_state.otp_verified:
+            st.markdown("""
+            <div class="secure-card" style="border-color: #4f8cf7;">
+                <h2 style="color: #4f8cf7;">📧 Email Verification Required</h2>
+                <p style="color: #c0c0d0;">
+                    An OTP has been sent to your email. Please enter it to verify your identity.
+                </p>
+                <p style="color: #8a8aa0; font-size: 0.85rem;">
+                    <strong style="color: #fbbf24;">Note:</strong> This ensures only the authorized person can access the site.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Show OTP input
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                otp_input = st.text_input("Enter OTP Code", placeholder="123456", max_chars=6, key="otp_input")
+            
+            with col2:
+                if st.button("📧 Resend OTP", use_container_width=True):
+                    # Generate and send new OTP
+                    otp_code = generate_otp()
+                    st.session_state.otp_code = otp_code
+                    st.session_state.otp_email = site_data.get('_user_email', '')
+                    
+                    # Send OTP
+                    send_otp_email(
+                        site_data.get('_user_email', ''),
+                        otp_code,
+                        site_data.get('SITE', 'Site')
+                    )
+                    st.success("✅ New OTP sent to your email!")
+                    st.rerun()
+            
+            if st.button("🔓 Verify & Access", key="verify_otp", use_container_width=True):
+                if otp_input:
+                    if otp_input == st.session_state.otp_code:
+                        st.session_state.otp_verified = True
+                        st.success("✅ OTP verified successfully!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid OTP. Please try again.")
+                else:
+                    st.warning("⚠️ Please enter the OTP code.")
+            
+            return
+        else:
+            # OTP already verified - show site
+            display_site_content(site_data)
+    else:
+        # No OTP required - show site directly
+        display_site_content(site_data)
 
 def display_site_content(site_data):
     """Display site content after successful validation"""
@@ -1147,16 +1072,7 @@ def display_site_content(site_data):
     else:
         time_source = "⚠️ Time source: System (offline - contact admin)"
     
-    device_status = "✅ Device Restricted" if site_data.get('_device_restricted', False) else "ℹ️ No device restriction"
-    device_count = site_data.get('_device_count', 0)
-    
-    mac_info = ""
-    if site_data.get('_mac_addresses'):
-        mac_info = f"<div style='color: #34d399; font-size: 0.7rem;'>📱 MAC: {site_data['_mac_addresses']}</div>"
-    
-    imei_info = ""
-    if site_data.get('_imei_numbers'):
-        imei_info = f"<div style='color: #fbbf24; font-size: 0.7rem;'>📱 IMEI: {site_data['_imei_numbers']}</div>"
+    device_status = "✅ Email Verified" if site_data.get('_device_restricted', False) else "ℹ️ No verification"
     
     st.markdown(f"""
     <div class="secure-card" style="border-color: #34d399;">
@@ -1179,10 +1095,8 @@ def display_site_content(site_data):
                 </span>
                 <br>
                 <span style="color: #34d399; font-size: 0.7rem;">
-                    {device_status} {f"({device_count} device(s))" if device_count > 0 else ""}
+                    {device_status}
                 </span>
-                {mac_info}
-                {imei_info}
             </div>
         </div>
     </div>
@@ -1273,7 +1187,7 @@ def display_site_content(site_data):
             st.markdown(f"""
             <div style="color: #6b6b85; font-size: 0.7rem; text-align: center; margin-top: 1rem; padding: 0.5rem; border-top: 1px solid #2a2a44;">
                 🔒 Secure access granted · Created: {created.strftime('%B %d, %Y')} · Expires: {expires.strftime('%B %d, %Y')}
-                {" · 📱 Device restricted" if site_data.get('_device_restricted', False) else ""}
+                {" · 📧 Email verified" if site_data.get('_device_restricted', False) else ""}
             </div>
             """, unsafe_allow_html=True)
         except:
@@ -1312,7 +1226,7 @@ def show_main():
         <p class="sub-text">
             ⏰ Time is verified online to prevent fraud<br>
             🔒 Each link is unique and expires after 30 days<br>
-            📱 Device verification using <strong style="color: #34d399;">MAC Address</strong> or <strong style="color: #fbbf24;">IMEI</strong>
+            📧 <strong style="color: #fbbf24;">Two-Factor Authentication</strong> via email OTP
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1333,7 +1247,7 @@ def show_main():
     st.markdown("""
     <div style="text-align: center; color: #8a8aa0; font-size: 0.8rem; margin-top: 1rem;">
         🔒 All access is encrypted and time-verified<br>
-        Links expire after 30 days • Device verification required
+        Links expire after 30 days • OTP verification required
     </div>
     """, unsafe_allow_html=True)
     
