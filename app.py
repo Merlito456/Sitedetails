@@ -10,6 +10,7 @@ from pathlib import Path
 import plotly.graph_objects as go
 import requests
 import time
+import urllib.parse
 
 # ------------------------------
 # PAGE CONFIG
@@ -43,7 +44,7 @@ if 'admin_tab' not in st.session_state:
 # SECURITY CONFIG
 # ------------------------------
 TOKEN_EXPIRY_DAYS = 30
-SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING"
+SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
 
 # ------------------------------
 # EXCEL DATA LOADER
@@ -132,63 +133,86 @@ def get_online_time():
         return None
 
 def generate_secure_token(site_plaid, user_email, user_name):
-    """Generate a secure token with embedded data"""
+    """Generate a secure token with embedded data - URL safe"""
     current_time = get_online_time()
     if current_time is None:
         current_time = datetime.utcnow()
     
     expiry = current_time + timedelta(days=TOKEN_EXPIRY_DAYS)
     
+    # Create payload with URL-safe characters
     payload = {
-        'created': current_time.isoformat(),
-        'expires': expiry.isoformat(),
-        'site_plaid': site_plaid,
-        'user_email': user_email,
-        'user_name': user_name
+        'c': current_time.isoformat(),  # created
+        'e': expiry.isoformat(),        # expires
+        's': site_plaid,                # site
+        'u': user_email,                # user email
+        'n': user_name                  # user name
     }
     
-    payload_str = f"{payload['created']}|{payload['expires']}|{payload['site_plaid']}|{payload['user_email']}|{payload['user_name']}"
+    # Convert to JSON-like string with separators
+    payload_str = f"{payload['c']}|{payload['e']}|{payload['s']}|{payload['u']}|{payload['n']}"
+    
+    # Create signature
     signature = hashlib.sha256(f"{payload_str}|{SECRET_KEY}".encode()).hexdigest()
     
+    # Combine and encode URL-safe
     token_data = f"{payload_str}|{signature}"
-    token = base64.urlsafe_b64encode(token_data.encode()).decode()
+    token = base64.urlsafe_b64encode(token_data.encode()).decode().rstrip('=')
     
     return token
 
 def validate_token(token, df):
     """Validate a token and return site data if valid"""
     try:
+        # Add padding back if missing
+        padding = 4 - (len(token) % 4)
+        if padding != 4:
+            token += '=' * padding
+        
+        # Decode token
         decoded = base64.urlsafe_b64decode(token.encode()).decode()
         parts = decoded.split('|')
         
         if len(parts) != 7:
-            return None, "Invalid token format"
+            return None, "Invalid token format - expected 7 parts"
         
+        # Extract parts - using short keys
         created_str, expires_str, site_plaid, user_email, user_name, signature = parts[:6]
         
+        # Verify signature
         payload_str = f"{created_str}|{expires_str}|{site_plaid}|{user_email}|{user_name}"
         expected_signature = hashlib.sha256(f"{payload_str}|{SECRET_KEY}".encode()).hexdigest()
         
         if signature != expected_signature:
-            return None, "Invalid token signature"
+            return None, "Invalid token signature - token may be tampered"
         
+        # Get online time for validation
         current_time = get_online_time()
         if current_time is None:
             current_time = datetime.utcnow()
+            st.warning("⚠️ Using system time for validation (online time unavailable)")
         
-        created = datetime.fromisoformat(created_str)
-        expires = datetime.fromisoformat(expires_str)
+        # Parse dates
+        try:
+            created = datetime.fromisoformat(created_str)
+            expires = datetime.fromisoformat(expires_str)
+        except ValueError as e:
+            return None, f"Invalid date format in token: {str(e)}"
         
+        # Check if token is expired
         if current_time > expires:
             return None, f"Token expired on {expires.strftime('%B %d, %Y at %I:%M %p')}"
         
+        # Check if token is used too early (fraud prevention)
         if current_time < created - timedelta(minutes=5):
             return None, "Token is from the future - possible fraud attempt"
         
+        # Get site data
         site_data = get_site_by_plaid(df, site_plaid)
         if site_data is None:
-            return None, "Site not found in database"
+            return None, f"Site not found: {site_plaid}"
         
+        # Add user info to site data
         site_data['_user_email'] = user_email
         site_data['_user_name'] = user_name
         site_data['_token_created'] = created_str
@@ -196,6 +220,8 @@ def validate_token(token, df):
         
         return site_data, None
         
+    except base64.binascii.Error as e:
+        return None, f"Invalid base64 encoding: {str(e)}"
     except Exception as e:
         return None, f"Token validation error: {str(e)}"
 
@@ -217,7 +243,6 @@ st.markdown("""
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Better text visibility */
     .stTextInput label, .stSelectbox label, .stCheckbox label {
         color: #e8e8f0 !important;
         font-weight: 500 !important;
@@ -366,7 +391,6 @@ st.markdown("""
         font-style: italic; 
     }
 
-    /* Buttons */
     .btn {
         padding: 0.5rem 1.2rem;
         border-radius: 40px;
@@ -515,7 +539,6 @@ st.markdown("""
     .nav-item .nav-icon { font-size: 1.2rem; }
     .nav-item.active { color: #4f8cf7; }
 
-    /* Batch results */
     .batch-result {
         background: #14141e;
         border-radius: 12px;
@@ -618,7 +641,6 @@ def show_admin():
     </div>
     """, unsafe_allow_html=True)
     
-    # Create tabs without duplicate IDs by using unique keys
     tab_labels = ["📊 Sites", "🔑 Generate Token", "📦 Batch Generate"]
     tabs = st.tabs(tab_labels)
     
@@ -626,7 +648,6 @@ def show_admin():
     with tabs[0]:
         st.subheader("📊 Sites")
         
-        # Search with exact match
         search_col1, search_col2 = st.columns([3, 1])
         with search_col1:
             search_term = st.text_input("🔍 Search (exact match)", placeholder="Enter PLAID or Site Name...", key="site_search")
@@ -636,24 +657,21 @@ def show_admin():
                     st.session_state.search_result = search_term
                     st.rerun()
         
-        # Show search results
         if hasattr(st.session_state, 'search_result') and st.session_state.search_result:
             search_term = st.session_state.search_result
             found = False
             
-            # Try exact match on PLAID
             site_data = get_site_by_plaid(df, search_term)
             if site_data:
                 found = True
                 st.success(f"✅ Found site: {site_data.get('SITE', '')}")
-                site_info(site_data)
+                display_site_card(site_data)
             else:
-                # Try exact match on SITE NAME
                 site_data = get_site_by_name(df, search_term)
                 if site_data:
                     found = True
                     st.success(f"✅ Found site: {site_data.get('SITE', '')}")
-                    site_info(site_data)
+                    display_site_card(site_data)
             
             if not found:
                 st.warning(f"⚠️ No site found matching: '{search_term}'")
@@ -662,7 +680,6 @@ def show_admin():
                 del st.session_state.search_result
                 st.rerun()
         
-        # List all sites
         sites = get_all_sites(df)
         st.markdown(f"**Total Sites:** {len(sites)}")
         
@@ -684,7 +701,6 @@ def show_admin():
     with tabs[1]:
         st.subheader("🔑 Generate Single Token")
         
-        # Site selection
         sites = get_all_sites(df)
         site_options = {f"{s['site']} ({s['plaid']})": s['plaid'] for s in sites}
         
@@ -748,7 +764,6 @@ def show_admin():
         </div>
         """, unsafe_allow_html=True)
         
-        # Batch input
         batch_input = st.text_area(
             "Enter PLAIDs or Site Names (comma-separated)",
             placeholder="MIN881, MIN806, MIN807, Site Alpha",
@@ -768,7 +783,6 @@ def show_admin():
             elif not batch_email or not batch_name:
                 st.warning("⚠️ Please enter user email and name")
             else:
-                # Parse input
                 items = [item.strip() for item in batch_input.split(',') if item.strip()]
                 
                 if not items:
@@ -778,7 +792,6 @@ def show_admin():
                     
                     results = []
                     for item in items:
-                        # Try PLAID first
                         site_data = get_site_by_plaid(df, item)
                         if site_data:
                             plaid = safe_str(site_data.get('PLAID', ''))
@@ -794,7 +807,6 @@ def show_admin():
                                 'link': link
                             })
                         else:
-                            # Try Site Name
                             site_data = get_site_by_name(df, item)
                             if site_data:
                                 plaid = safe_str(site_data.get('PLAID', ''))
@@ -818,7 +830,6 @@ def show_admin():
                                     'link': ''
                                 })
                     
-                    # Display results
                     st.markdown("---")
                     st.subheader("📋 Batch Results")
                     
@@ -833,7 +844,6 @@ def show_admin():
                     with col3:
                         st.markdown(f"**❌ Failed:** {error_count}")
                     
-                    # Show detailed results
                     for result in results:
                         if result['status'] == 'success':
                             st.markdown(f"""
@@ -864,12 +874,10 @@ def show_admin():
                             </div>
                             """, unsafe_allow_html=True)
                     
-                    # Export all links
                     if success_count > 0:
                         st.markdown("---")
                         st.subheader("📥 Export All Links")
                         
-                        # Create CSV with all successful links
                         export_data = []
                         for r in results:
                             if r['status'] == 'success':
@@ -890,7 +898,7 @@ def show_admin():
                                 use_container_width=True
                             )
 
-def site_info(site_data):
+def display_site_card(site_data):
     """Display site information in a formatted card"""
     site_name = safe_str(site_data.get('SITE', ''))
     plaid = safe_str(site_data.get('PLAID', ''))
@@ -977,7 +985,21 @@ def show_site_viewer(token):
         """, unsafe_allow_html=True)
         return
     
+    # Clean the token (remove any URL encoding artifacts)
+    token = token.strip()
+    
     site_data, error = validate_token(token, df)
+    
+    if error:
+        # Check if token might have been URL encoded
+        try:
+            decoded_token = urllib.parse.unquote(token)
+            if decoded_token != token:
+                site_data, error = validate_token(decoded_token, df)
+                if not error:
+                    st.success("✅ Token successfully decoded and validated")
+        except:
+            pass
     
     if error:
         st.markdown(f"""
@@ -1110,13 +1132,16 @@ def show_site_viewer(token):
     """, unsafe_allow_html=True)
     
     if site_data.get('_token_created') and site_data.get('_token_expires'):
-        created = datetime.fromisoformat(site_data['_token_created'])
-        expires = datetime.fromisoformat(site_data['_token_expires'])
-        st.markdown(f"""
-        <div style="color: #6b6b85; font-size: 0.7rem; text-align: center; margin-top: 1rem; padding: 0.5rem; border-top: 1px solid #2a2a44;">
-            🔒 Secure access granted · Created: {created.strftime('%B %d, %Y')} · Expires: {expires.strftime('%B %d, %Y')}
-        </div>
-        """, unsafe_allow_html=True)
+        try:
+            created = datetime.fromisoformat(site_data['_token_created'])
+            expires = datetime.fromisoformat(site_data['_token_expires'])
+            st.markdown(f"""
+            <div style="color: #6b6b85; font-size: 0.7rem; text-align: center; margin-top: 1rem; padding: 0.5rem; border-top: 1px solid #2a2a44;">
+                🔒 Secure access granted · Created: {created.strftime('%B %d, %Y')} · Expires: {expires.strftime('%B %d, %Y')}
+            </div>
+            """, unsafe_allow_html=True)
+        except:
+            pass
 
 # ------------------------------
 # BOTTOM NAVIGATION
