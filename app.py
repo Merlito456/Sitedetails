@@ -52,18 +52,15 @@ SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
 # ------------------------------
 def get_device_fingerprint():
     """Get device fingerprint from query params (set by Android app or JavaScript)"""
-    # Try from query params
     query_params = st.query_params
     fp = query_params.get('device_fp', None)
     if fp:
         st.session_state.device_fingerprint = fp
         return fp
     
-    # Try from session
     if st.session_state.device_fingerprint:
         return st.session_state.device_fingerprint
     
-    # Generate fallback (for web testing)
     import platform
     info = [
         platform.system(),
@@ -159,7 +156,6 @@ def get_online_time():
 def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=""):
     """
     Generate token with embedded MAC addresses and IMEI numbers.
-    These are pre-approved and cannot be changed by the user.
     Format: "MAC:AA:BB:CC:DD:EE:FF, IMEI:123456789012345"
     """
     current_time = get_online_time()
@@ -168,13 +164,10 @@ def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=
     
     expiry = current_time + timedelta(days=TOKEN_EXPIRY_DAYS)
     
-    # Process device identifiers
     devices = []
     if device_identifiers:
-        # Split by comma
         device_list = [d.strip() for d in device_identifiers.split(',') if d.strip()]
         for device in device_list:
-            # Hash each device identifier
             hashed = hashlib.sha256(device.encode()).hexdigest()
             devices.append(hashed)
     
@@ -185,7 +178,7 @@ def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=
         'u': user_name,
         'a': user_email,
         'd': devices,
-        'raw': device_identifiers  # Store for display (optional)
+        'raw': device_identifiers
     }
     
     payload_json = json.dumps(payload, separators=(',', ':'))
@@ -203,12 +196,10 @@ def validate_device(device_to_check, allowed_devices_hashed):
     if not device_to_check or not allowed_devices_hashed:
         return False
     
-    # Try exact match first
     hashed = hashlib.sha256(device_to_check.encode()).hexdigest()
     if hashed in allowed_devices_hashed:
         return True
     
-    # Try without the prefix (if user just sent MAC or IMEI)
     if device_to_check.startswith('MAC:'):
         without_prefix = device_to_check[4:]
         hashed = hashlib.sha256(without_prefix.encode()).hexdigest()
@@ -275,7 +266,6 @@ def validate_token(token, df, device_fingerprint=None):
         if current_time < created - timedelta(minutes=5):
             return None, "Token is from the future - possible fraud"
         
-        # DEVICE VALIDATION - Check MAC/IMEI against allowed list
         if allowed_devices and device_fingerprint:
             if not validate_device(device_fingerprint, allowed_devices):
                 return None, "Device not authorized. MAC Address or IMEI not recognized."
@@ -700,7 +690,6 @@ def show_admin():
     </div>
     """, unsafe_allow_html=True)
     
-    # Show device info for admin reference
     device_id = get_device_id()
     st.markdown(f"""
     <div class="device-info">
@@ -805,9 +794,7 @@ def show_admin():
             
             if st.button("🔗 Generate Link", key="single_generate", use_container_width=True):
                 if user_email and user_name and selected_site_plaid and device_identifiers:
-                    # Clean the input - remove newlines and extra spaces
                     clean_devices = device_identifiers.replace('\n', ',').replace(' ', '')
-                    # Remove duplicate commas
                     clean_devices = ','.join([d.strip() for d in clean_devices.split(',') if d.strip()])
                     
                     token = generate_secure_token(
@@ -1074,12 +1061,10 @@ def display_site_card(site_data):
 # SITE VIEWER PAGE
 # ------------------------------
 def show_site_viewer(token):
-    # Inject device fingerprint script (for web testing)
     inject_device_fingerprint_script()
     
     app_header()
     
-    # Get device fingerprint
     device_fp = get_device_fingerprint()
     
     df = st.session_state.df
@@ -1103,7 +1088,6 @@ def show_site_viewer(token):
         """, unsafe_allow_html=True)
         return
     
-    # Clean the token
     token = token.strip()
     if '%' in token:
         try:
@@ -1111,7 +1095,6 @@ def show_site_viewer(token):
         except:
             pass
     
-    # Validate token with device fingerprint
     site_data, error = validate_token(token, df, device_fp)
     
     if error:
@@ -1142,7 +1125,6 @@ def show_site_viewer(token):
         """, unsafe_allow_html=True)
         return
     
-    # Success - display site
     display_site_content(site_data)
 
 def display_site_content(site_data):
@@ -1157,7 +1139,6 @@ def display_site_content(site_data):
     device_status = "✅ Device Verified" if site_data.get('_device_restricted', False) else "ℹ️ No device restriction"
     device_count = site_data.get('_device_count', 0)
     
-    # Show raw devices if available
     raw_devices = site_data.get('_raw_devices', '')
     
     st.markdown(f"""
@@ -1297,10 +1278,73 @@ def bottom_nav():
     """, unsafe_allow_html=True)
 
 # ------------------------------
+# API ENDPOINT FOR ANDROID APP (GET METHOD)
+# ------------------------------
+def api_validate():
+    """
+    API endpoint for Android app validation using GET parameters.
+    URL format: /?api=validate&token=XXX&device_fp=YYY&device_id=ZZZ
+    """
+    try:
+        # Get parameters from query string
+        token = st.query_params.get('token', '').strip()
+        device_fingerprint = st.query_params.get('device_fp', '').strip()
+        device_id = st.query_params.get('device_id', '').strip()
+        
+        # Validate required parameters
+        if not token:
+            st.json({
+                'success': False,
+                'error': 'Missing token parameter. Please include ?token=YOUR_TOKEN'
+            })
+            return
+        
+        # Load data
+        df = st.session_state.df
+        if df is None:
+            df = load_excel_data("database.xlsx")
+            if df is None:
+                possible_paths = ["data/database.xlsx", "./data/database.xlsx"]
+                for path in possible_paths:
+                    df = load_excel_data(path)
+                    if df is not None:
+                        break
+            if df is not None:
+                st.session_state.df = df
+        
+        if df is None or df.empty:
+            st.json({
+                'success': False,
+                'error': 'No data available. Please upload database.xlsx to the server.'
+            })
+            return
+        
+        # Validate token with device fingerprint
+        site_data, error = validate_token(token, df, device_fingerprint)
+        
+        if site_data:
+            # Remove internal fields before sending
+            clean_data = {k: v for k, v in site_data.items() if not k.startswith('_')}
+            st.json({
+                'success': True,
+                'data': clean_data
+            })
+        else:
+            st.json({
+                'success': False,
+                'error': error or 'Validation failed'
+            })
+            
+    except Exception as e:
+        st.json({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        })
+
+# ------------------------------
 # MAIN
 # ------------------------------
 def show_main():
-    # Inject device fingerprint script (for web testing)
     inject_device_fingerprint_script()
     
     app_header()
@@ -1349,33 +1393,6 @@ def show_main():
         st.rerun()
     
     bottom_nav()
-
-# ------------------------------
-# API ENDPOINT FOR ANDROID APP
-# ------------------------------
-def api_validate():
-    """
-    API endpoint for Android app validation
-    This should be called via POST from the Android app
-    """
-    # This is a simplified version - in production, you'd use Flask/FastAPI
-    try:
-        # Get data from query params or POST data
-        if st.query_params.get('api') == 'validate':
-            # For demo, we'll simulate a response
-            st.json({
-                'success': True,
-                'message': 'API endpoint for Android app',
-                'data': {
-                    'site': 'Sample Site',
-                    'plaid': 'SAMPLE001'
-                }
-            })
-    except Exception as e:
-        st.json({
-            'success': False,
-            'error': str(e)
-        })
 
 # ------------------------------
 # ROUTING
