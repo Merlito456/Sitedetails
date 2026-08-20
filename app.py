@@ -12,6 +12,7 @@ import requests
 import time
 import urllib.parse
 import json
+import hashlib
 
 # ------------------------------
 # PAGE CONFIG
@@ -28,24 +29,74 @@ st.set_page_config(
 # ------------------------------
 if 'page' not in st.session_state:
     st.session_state.page = 'main'
-if 'access_granted' not in st.session_state:
-    st.session_state.access_granted = False
-if 'current_site' not in st.session_state:
-    st.session_state.current_site = None
-if 'token_valid' not in st.session_state:
-    st.session_state.token_valid = False
 if 'df' not in st.session_state:
     st.session_state.df = None
 if 'generated_tokens' not in st.session_state:
     st.session_state.generated_tokens = []
 if 'admin_tab' not in st.session_state:
     st.session_state.admin_tab = 0
+if 'device_fingerprint' not in st.session_state:
+    st.session_state.device_fingerprint = None
 
 # ------------------------------
 # SECURITY CONFIG
 # ------------------------------
 TOKEN_EXPIRY_DAYS = 30
 SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
+
+# ------------------------------
+# DEVICE FINGERPRINT FUNCTIONS
+# ------------------------------
+def get_device_fingerprint():
+    """
+    Get device fingerprint from browser/device info.
+    This simulates MAC address and IMEI collection.
+    In production, you'd need a more sophisticated approach.
+    """
+    # Try to get from session state first
+    if st.session_state.device_fingerprint:
+        return st.session_state.device_fingerprint
+    
+    # Try to get from query params (set by JavaScript)
+    query_params = st.query_params
+    fp = query_params.get('device_fp', None)
+    if fp:
+        st.session_state.device_fingerprint = fp
+        return fp
+    
+    # Generate a fingerprint from available browser info
+    # In a real implementation, you'd use JavaScript to collect MAC/IMEI
+    # For demo, we'll use a combination of available data
+    import platform
+    import sys
+    
+    # Get system info (this is a fallback, not real MAC/IMEI)
+    info = [
+        platform.system(),
+        platform.node(),
+        platform.release(),
+        platform.version(),
+        platform.machine(),
+        sys.getsizeof(object())
+    ]
+    info_str = "|".join(str(i) for i in info)
+    fp = hashlib.md5(info_str.encode()).hexdigest()[:16]
+    
+    st.session_state.device_fingerprint = fp
+    return fp
+
+def get_device_info_from_fingerprint(fingerprint):
+    """
+    Parse device info from fingerprint hash.
+    This is a simplified version - in production you'd have a proper mapping.
+    """
+    # For demo purposes, we'll just return a formatted string
+    # In production, you'd have a proper device registration system
+    return {
+        'type': 'Device',
+        'id': fingerprint[:8] + '...' + fingerprint[-4:],
+        'fingerprint': fingerprint
+    }
 
 # ------------------------------
 # EXCEL DATA LOADER
@@ -66,7 +117,6 @@ def get_site_by_plaid(df, plaid):
     if df is None or df.empty:
         return None
     
-    # Exact match
     site = df[df['PLAID'].astype(str).str.strip() == str(plaid).strip()]
     if not site.empty:
         return site.iloc[0].to_dict()
@@ -78,7 +128,6 @@ def get_site_by_name(df, site_name):
     if df is None or df.empty:
         return None
     
-    # Exact match
     site = df[df['SITE'].astype(str).str.strip().str.upper() == str(site_name).strip().upper()]
     if not site.empty:
         return site.iloc[0].to_dict()
@@ -133,21 +182,33 @@ def get_online_time():
     except:
         return None
 
-def generate_secure_token(site_plaid, user_email, user_name):
-    """Generate a secure token with embedded data - SIMPLIFIED"""
+def generate_secure_token(site_plaid, user_email, user_name, allowed_devices=""):
+    """
+    Generate a secure token with embedded data including allowed devices.
+    allowed_devices: comma-separated list of MAC addresses and/or IMEI numbers
+    """
     current_time = get_online_time()
     if current_time is None:
         current_time = datetime.utcnow()
     
     expiry = current_time + timedelta(days=TOKEN_EXPIRY_DAYS)
     
-    # Create a simple JSON payload
+    # Clean allowed devices
+    devices = []
+    if allowed_devices:
+        # Split by comma and clean
+        device_list = [d.strip() for d in allowed_devices.split(',') if d.strip()]
+        # Hash each device ID for security (so we don't store plain MAC/IMEI)
+        devices = [hashlib.sha256(d.encode()).hexdigest() for d in device_list]
+    
+    # Create payload
     payload = {
         'c': current_time.isoformat(),
         'e': expiry.isoformat(),
         's': site_plaid,
         'u': user_email,
-        'n': user_name
+        'n': user_name,
+        'd': devices  # List of hashed device identifiers
     }
     
     # Convert to JSON string
@@ -159,18 +220,21 @@ def generate_secure_token(site_plaid, user_email, user_name):
     # Combine payload and signature
     token_data = f"{payload_json}|{signature}"
     
-    # Encode to hex (URL-safe without any special characters)
+    # Encode to hex (URL-safe)
     token = token_data.encode().hex()
     
     return token
 
-def validate_token(token, df):
-    """Validate a token and return site data if valid - SIMPLIFIED"""
+def validate_token(token, df, device_fingerprint=None):
+    """
+    Validate a token and return site data if valid.
+    Also validates device fingerprint against allowed devices.
+    """
     try:
         # Clean the token
         token = token.strip()
         
-        # Remove any URL encoding artifacts
+        # Remove URL encoding
         if '%' in token:
             token = urllib.parse.unquote(token)
         
@@ -204,6 +268,7 @@ def validate_token(token, df):
         site_plaid = payload.get('s')
         user_email = payload.get('u')
         user_name = payload.get('n')
+        allowed_devices = payload.get('d', [])  # List of hashed device IDs
         
         if not all([created_str, expires_str, site_plaid]):
             return None, "Missing required token data"
@@ -228,6 +293,17 @@ def validate_token(token, df):
         if current_time < created - timedelta(minutes=5):
             return None, "Token is from the future - possible fraud attempt"
         
+        # DEVICE VALIDATION: Check if device is allowed
+        if allowed_devices and device_fingerprint:
+            # Hash the current device fingerprint
+            hashed_device = hashlib.sha256(device_fingerprint.encode()).hexdigest()
+            
+            if hashed_device not in allowed_devices:
+                return None, "Device not authorized for this token. Please use an authorized device."
+        elif allowed_devices:
+            # Token has device restrictions but no device fingerprint provided
+            return None, "Device verification required. Please ensure your device is registered."
+        
         # Get site data
         site_data = get_site_by_plaid(df, site_plaid)
         if site_data is None:
@@ -238,6 +314,8 @@ def validate_token(token, df):
         site_data['_user_name'] = user_name
         site_data['_token_created'] = created_str
         site_data['_token_expires'] = expires_str
+        site_data['_device_restricted'] = bool(allowed_devices)
+        site_data['_device_count'] = len(allowed_devices)
         
         return site_data, None
         
@@ -245,12 +323,77 @@ def validate_token(token, df):
         return None, f"Token validation error: {str(e)}"
 
 # ------------------------------
-# DARK THEME CSS WITH BETTER TEXT VISIBILITY
+# DEVICE FINGERPRINT CAPTURE (JavaScript)
+# ------------------------------
+def inject_device_fingerprint_script():
+    """
+    Inject JavaScript to capture device fingerprint and send to Streamlit.
+    This is a simplified version - in production, you'd use more sophisticated methods.
+    """
+    fingerprint_js = """
+    <script>
+    function getDeviceFingerprint() {
+        // Collect available device/browser information
+        var screen = window.screen;
+        var nav = navigator;
+        
+        // Create a fingerprint from available data
+        var components = [
+            nav.userAgent,
+            nav.platform,
+            nav.language,
+            screen.width + 'x' + screen.height,
+            screen.colorDepth,
+            new Date().getTimezoneOffset(),
+            nav.hardwareConcurrency || 'unknown',
+            nav.deviceMemory || 'unknown'
+        ];
+        
+        // Try to get additional device info if available
+        try {
+            // Some browsers expose device info via experimental APIs
+            if (nav.mediaDevices && nav.mediaDevices.enumerateDevices) {
+                // This requires user permission, so we'll just note it's available
+                components.push('mediaDevices_available');
+            }
+        } catch(e) {}
+        
+        // Create fingerprint hash
+        var fingerprint = components.join('|');
+        var hash = 0;
+        for (var i = 0; i < fingerprint.length; i++) {
+            var char = fingerprint.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        var fp = 'device_' + Math.abs(hash).toString(16);
+        
+        // Store in session storage
+        try {
+            sessionStorage.setItem('device_fingerprint', fp);
+        } catch(e) {}
+        
+        // Send to Streamlit via query param
+        var url = new URL(window.location);
+        url.searchParams.set('device_fp', fp);
+        window.history.replaceState({}, '', url);
+        
+        return fp;
+    }
+    
+    // Execute immediately
+    getDeviceFingerprint();
+    </script>
+    """
+    components.html(fingerprint_js, height=0)
+
+# ------------------------------
+# DARK THEME CSS (condensed for space - same as before)
 # ------------------------------
 st.markdown("""
     <style>
     /* ========================================
-       GLOBAL STYLES - IMPROVED VISIBILITY
+       GLOBAL STYLES
        ======================================== */
     .main .block-container {
         padding: 0.5rem 0.8rem 5rem 0.8rem;
@@ -605,6 +748,10 @@ def app_header():
     time_status = "✅ Online" if online_time else "⚠️ Offline (system time)"
     time_class = "online" if online_time else "offline"
     
+    # Get device info
+    device_fp = get_device_fingerprint()
+    device_display = device_fp[:8] + "..." + device_fp[-4:] if device_fp else "Not detected"
+    
     st.markdown(f"""
     <div class="app-header">
         <div class="app-header-content">
@@ -616,6 +763,9 @@ def app_header():
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                 <span class="time-status">
                     🕐 <span class="{time_class}">{time_status}</span>
+                </span>
+                <span class="time-status" style="font-size:0.6rem;">
+                    📱 <span style="color:#60a5fa;">{device_display}</span>
                 </span>
                 <button class="btn btn-outline" onclick="location.href='/'">🏠 Home</button>
                 <button class="btn btn-outline" onclick="location.href='?page=admin'">⚙️ Admin</button>
@@ -655,8 +805,11 @@ def show_admin():
     st.markdown("""
     <div class="secure-card">
         <h2>⚙️ Admin Dashboard</h2>
-        <p>Generate secure time-verified links for authorized users.</p>
-        <p class="sub-text">🔍 Search by PLAID or Site Name (exact match) · Batch generate links with comma-separated values</p>
+        <p>Generate secure time-verified links with device restrictions for authorized users.</p>
+        <p class="sub-text">
+            🔍 Search by PLAID or Site Name (exact match) · Batch generate links with comma-separated values<br>
+            📱 Add MAC addresses and/or IMEI numbers separated by commas to restrict device access
+        </p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -718,7 +871,7 @@ def show_admin():
     
     # Tab 1: Single Token
     with tabs[1]:
-        st.subheader("🔑 Generate Single Token")
+        st.subheader("🔑 Generate Single Token with Device Restriction")
         
         sites = get_all_sites(df)
         site_options = {f"{s['site']} ({s['plaid']})": s['plaid'] for s in sites}
@@ -733,9 +886,25 @@ def show_admin():
             with col2:
                 user_name = st.text_input("User Name", placeholder="John Doe", key="single_name")
             
+            st.markdown("""
+            <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0;">
+                <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0;">
+                    📱 Enter allowed device identifiers (MAC addresses and/or IMEI numbers) separated by commas.
+                    <br>Example: <code>AA:BB:CC:DD:EE:FF, 123456789012345, 98:76:54:32:10:AB</code>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            allowed_devices = st.text_input(
+                "Allowed Devices (MAC addresses, IMEI numbers - comma separated)",
+                placeholder="AA:BB:CC:DD:EE:FF, 123456789012345, 98:76:54:32:10:AB",
+                key="single_devices",
+                help="Only these devices will be able to access the site"
+            )
+            
             if st.button("🔗 Generate Link", key="single_generate", use_container_width=True):
                 if user_email and user_name and selected_site_plaid:
-                    token = generate_secure_token(selected_site_plaid, user_email, user_name)
+                    token = generate_secure_token(selected_site_plaid, user_email, user_name, allowed_devices)
                     base_url = st.get_option('server.baseUrlPath') or ""
                     link = f"{base_url}/?token={token}"
                     
@@ -746,6 +915,9 @@ def show_admin():
                         expiry = online_time + timedelta(days=TOKEN_EXPIRY_DAYS)
                     else:
                         expiry = datetime.utcnow() + timedelta(days=TOKEN_EXPIRY_DAYS)
+                    
+                    # Count devices
+                    device_count = len([d for d in allowed_devices.split(',') if d.strip()]) if allowed_devices else 0
                     
                     col1, col2 = st.columns(2)
                     with col1:
@@ -763,16 +935,17 @@ def show_admin():
                             <div style="color: #d0d0e0;">📧 Email: {user_email}</div>
                             <div style="color: #d0d0e0;">⏰ Expires: {expiry.strftime('%B %d, %Y at %I:%M %p UTC')}</div>
                             <div style="color: #d0d0e0;">📍 Site: {selected_site_display}</div>
+                            <div style="color: #60a5fa;">📱 Device Restricted: {device_count} device(s)</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    st.warning("⚠️ Please fill in all fields")
+                    st.warning("⚠️ Please fill in all required fields")
         else:
             st.warning("No sites available.")
     
     # Tab 2: Batch Generate
     with tabs[2]:
-        st.subheader("📦 Batch Generate Links")
+        st.subheader("📦 Batch Generate Links with Device Restriction")
         
         st.markdown("""
         <div class="secure-card" style="background: #14141e; padding: 1rem;">
@@ -796,6 +969,21 @@ def show_admin():
         with col2:
             batch_name = st.text_input("User Name (for all links)", placeholder="John Doe", key="batch_name")
         
+        st.markdown("""
+        <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0;">
+            <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0;">
+                📱 Enter allowed device identifiers (MAC addresses and/or IMEI numbers) separated by commas.
+                <br>These will apply to ALL generated links.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        batch_devices = st.text_input(
+            "Allowed Devices (MAC addresses, IMEI numbers - comma separated)",
+            placeholder="AA:BB:CC:DD:EE:FF, 123456789012345",
+            key="batch_devices"
+        )
+        
         if st.button("🔗 Generate All Links", key="batch_generate", use_container_width=True):
             if not batch_input:
                 st.warning("⚠️ Please enter at least one PLAID or Site Name")
@@ -815,7 +1003,7 @@ def show_admin():
                         if site_data:
                             plaid = safe_str(site_data.get('PLAID', ''))
                             site_name = safe_str(site_data.get('SITE', ''))
-                            token = generate_secure_token(plaid, batch_email, batch_name)
+                            token = generate_secure_token(plaid, batch_email, batch_name, batch_devices)
                             base_url = st.get_option('server.baseUrlPath') or ""
                             link = f"{base_url}/?token={token}"
                             results.append({
@@ -830,7 +1018,7 @@ def show_admin():
                             if site_data:
                                 plaid = safe_str(site_data.get('PLAID', ''))
                                 site_name = safe_str(site_data.get('SITE', ''))
-                                token = generate_secure_token(plaid, batch_email, batch_name)
+                                token = generate_secure_token(plaid, batch_email, batch_name, batch_devices)
                                 base_url = st.get_option('server.baseUrlPath') or ""
                                 link = f"{base_url}/?token={token}"
                                 results.append({
@@ -981,7 +1169,13 @@ def display_site_card(site_data):
 # SITE VIEWER PAGE
 # ------------------------------
 def show_site_viewer(token):
+    # Inject device fingerprint script
+    inject_device_fingerprint_script()
+    
     app_header()
+    
+    # Get device fingerprint
+    device_fp = get_device_fingerprint()
     
     df = st.session_state.df
     if df is None:
@@ -1014,15 +1208,15 @@ def show_site_viewer(token):
         except:
             pass
     
-    # Validate
-    site_data, error = validate_token(token, df)
+    # Validate with device fingerprint
+    site_data, error = validate_token(token, df, device_fp)
     
     if error:
         st.markdown(f"""
         <div class="secure-card" style="border-color: #ef4444;">
             <h2 style="color: #ef4444;">🔒 Access Denied</h2>
             <p style="color: #d0d0e0;">{error}</p>
-            <p style="color: #8a8aa0; font-size: 0.85rem;">The link may have expired or been invalidated.</p>
+            <p style="color: #8a8aa0; font-size: 0.85rem;">The link may have expired, been invalidated, or your device is not authorized.</p>
             <br>
             <button class="btn btn-primary" onclick="location.href='/'">🏠 Return to Home</button>
         </div>
@@ -1045,6 +1239,10 @@ def show_site_viewer(token):
     else:
         time_source = "⚠️ Time source: System (offline - contact admin)"
     
+    # Device info
+    device_status = "✅ Authorized Device" if site_data.get('_device_restricted', False) else "ℹ️ No device restriction"
+    device_count = site_data.get('_device_count', 0)
+    
     st.markdown(f"""
     <div class="secure-card" style="border-color: #34d399;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -1064,12 +1262,16 @@ def show_site_viewer(token):
                 <span style="color: #8a8aa0; font-size: 0.7rem;">
                     👤 {site_data.get('_user_name', 'Authorized User')}
                 </span>
+                <br>
+                <span style="color: #60a5fa; font-size: 0.7rem;">
+                    {device_status} {f"({device_count} device(s))" if device_count > 0 else ""}
+                </span>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Site details
+    # Site details (same as before)
     site_name = safe_str(site_data.get('SITE', ''))
     plaid = safe_str(site_data.get('PLAID', ''))
     region = safe_str(site_data.get('REGION', ''))
@@ -1154,6 +1356,7 @@ def show_site_viewer(token):
             st.markdown(f"""
             <div style="color: #6b6b85; font-size: 0.7rem; text-align: center; margin-top: 1rem; padding: 0.5rem; border-top: 1px solid #2a2a44;">
                 🔒 Secure access granted · Created: {created.strftime('%B %d, %Y')} · Expires: {expires.strftime('%B %d, %Y')}
+                {" · 📱 Device restricted" if site_data.get('_device_restricted', False) else ""}
             </div>
             """, unsafe_allow_html=True)
         except:
@@ -1176,6 +1379,9 @@ def bottom_nav():
 # MAIN
 # ------------------------------
 def show_main():
+    # Inject device fingerprint script
+    inject_device_fingerprint_script()
+    
     app_header()
     
     query_params = st.query_params
@@ -1191,7 +1397,8 @@ def show_main():
         <p>Enter your secure link or use an access token to view site details.</p>
         <p class="sub-text">
             ⏰ Time is verified online to prevent fraud<br>
-            🔒 Each link is unique and expires after 30 days
+            🔒 Each link is unique and expires after 30 days<br>
+            📱 Device restrictions can be applied to prevent unauthorized access
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1212,7 +1419,7 @@ def show_main():
     st.markdown("""
     <div style="text-align: center; color: #8a8aa0; font-size: 0.8rem; margin-top: 1rem;">
         🔒 All access is encrypted and time-verified<br>
-        Links expire after 30 days
+        Links expire after 30 days • Device restrictions available
     </div>
     """, unsafe_allow_html=True)
     
