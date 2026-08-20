@@ -6,10 +6,6 @@ from datetime import datetime
 import plotly.graph_objects as go
 import os
 import re
-import hashlib
-import uuid
-import json
-import streamlit.components.v1 as components
 
 # ------------------------------
 # PAGE CONFIG
@@ -24,54 +20,20 @@ st.set_page_config(
 # ------------------------------
 # SESSION STATE INIT
 # ------------------------------
-if 'page' not in st.session_state:
-    st.session_state.page = 'login'
 if 'df' not in st.session_state:
     st.session_state.df = None
-if 'users_df' not in st.session_state:
-    st.session_state.users_df = None
 if 'search_term' not in st.session_state:
     st.session_state.search_term = ''
 if 'has_searched' not in st.session_state:
     st.session_state.has_searched = False
 if 'search_results' not in st.session_state:
     st.session_state.search_results = None
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-if 'username' not in st.session_state:
-    st.session_state.username = ''
-if 'user_role' not in st.session_state:
-    st.session_state.user_role = ''
-if 'user_company' not in st.session_state:
-    st.session_state.user_company = ''
-if 'user_region' not in st.session_state:
-    st.session_state.user_region = ''
-if 'audit_log' not in st.session_state:
-    st.session_state.audit_log = []
-if 'device_fingerprint' not in st.session_state:
-    st.session_state.device_fingerprint = None
+if 'page' not in st.session_state:
+    st.session_state.page = 'main'
 
 # ------------------------------
 # COLUMN MAPPINGS (Based on actual Excel file)
 # ------------------------------
-COLUMN_MAPPINGS = {
-    'PLAID': 'PLAID',
-    'SITE': 'SITE',
-    'REGION': 'REGION',
-    'PROVINCE': 'PROVINCE',
-    'MUNICIPALITY': 'MUNICIPALITY',
-    'BARANGAY': 'BARANGAY',
-    'TERRITORY': 'TERRITORY',
-    'LATITUDE': 'LATITUDE',
-    'LONGITUDE': 'LONGITUDE',
-    'SITE_ADD': 'SITE_ADD',
-    'ASSIGNED_HUB': 'ASSIGNED_HUB',
-    'TOWERCO': 'TOWERCO',
-    'NEW_ASSIGN_HUB': 'NEW ASSIGN HUB',  # Column M - GLOBE HUB
-    'FO_ONSITE': 'NEW ENGINEER_ANM1',     # Column S - FO ONSITE
-    'CONTACT_NUMBER': 'CONTACT NUMBER',   # Column U - FO NUMBER
-}
-
 # Display names for the UI
 DISPLAY_NAMES = {
     'NEW ASSIGN HUB': '🌐 GLOBE HUB',
@@ -130,110 +92,6 @@ st.markdown("""
     header {visibility: hidden;}
 
     /* ========================================
-       LOGIN PAGE
-       ======================================== */
-    .login-container {
-        max-width: 400px;
-        margin: 2rem auto;
-        padding: 2rem;
-        background: var(--bg-secondary);
-        border-radius: 20px;
-        border: 1px solid var(--border-color);
-        box-shadow: 0 8px 30px var(--shadow-color);
-    }
-
-    .login-logo {
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-
-    .login-logo-icon {
-        font-size: 3rem;
-    }
-
-    .login-title {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin-top: 0.5rem;
-    }
-
-    .login-subtitle {
-        color: var(--text-muted);
-        font-size: 0.85rem;
-        margin-top: 0.3rem;
-    }
-
-    .login-input {
-        width: 100%;
-        padding: 0.8rem 1rem;
-        background: var(--bg-input);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        color: var(--text-primary);
-        font-size: 0.95rem;
-        margin-bottom: 1rem;
-        transition: all 0.2s;
-    }
-
-    .login-input:focus {
-        border-color: var(--accent-blue);
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.15);
-    }
-
-    .login-btn {
-        width: 100%;
-        padding: 0.8rem;
-        background: var(--accent-blue);
-        color: white;
-        border: none;
-        border-radius: 12px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .login-btn:hover {
-        background: var(--accent-blue-hover);
-        transform: scale(1.02);
-    }
-
-    .login-error {
-        color: var(--accent-red);
-        font-size: 0.85rem;
-        text-align: center;
-        margin-top: 0.5rem;
-        padding: 0.5rem;
-        background: rgba(239, 68, 68, 0.1);
-        border-radius: 8px;
-        border: 1px solid rgba(239, 68, 68, 0.2);
-    }
-
-    .device-info {
-        background: var(--bg-card);
-        border-radius: 8px;
-        padding: 0.8rem;
-        margin: 0.5rem 0;
-        border: 1px solid var(--border-color);
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-    }
-    .device-info strong {
-        color: var(--text-primary);
-    }
-    .device-warning {
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid var(--accent-red);
-        border-radius: 8px;
-        padding: 0.8rem;
-        margin: 0.5rem 0;
-        color: var(--accent-red);
-        font-size: 0.85rem;
-    }
-
-    /* ========================================
        APP HEADER
        ======================================== */
     .app-header {
@@ -290,21 +148,6 @@ st.markdown("""
         align-items: center;
     }
 
-    .user-info {
-        color: var(--text-secondary);
-        font-size: 0.75rem;
-        margin-right: 0.5rem;
-        padding: 0.3rem 0.8rem;
-        background: var(--bg-card);
-        border-radius: 40px;
-        border: 1px solid var(--border-color);
-    }
-
-    .user-info .role-badge {
-        color: var(--accent-blue);
-        font-weight: 600;
-    }
-
     .nav-btn {
         background: transparent;
         border: 1px solid var(--border-color);
@@ -326,17 +169,6 @@ st.markdown("""
         background: var(--bg-card);
         border-color: var(--accent-blue);
         color: var(--text-primary);
-    }
-
-    .logout-btn {
-        border-color: var(--accent-red);
-        color: var(--accent-red);
-    }
-
-    .logout-btn:hover {
-        background: rgba(239, 68, 68, 0.1);
-        border-color: var(--accent-red);
-        color: var(--accent-red);
     }
 
     /* ========================================
@@ -861,10 +693,6 @@ st.markdown("""
             font-size: 0.95rem;
             min-width: 80px;
         }
-
-        .login-container {
-            padding: 3rem;
-        }
     }
 
     /* ========================================
@@ -918,10 +746,6 @@ st.markdown("""
             font-size: 0.65rem;
             padding: 0.4rem 0.6rem;
         }
-        .login-container {
-            padding: 1.5rem;
-            margin: 1rem;
-        }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -941,136 +765,6 @@ def load_excel_data(file_path):
     except Exception as e:
         st.error(f"❌ Error loading file: {str(e)}")
         return None
-
-def load_users():
-    """Load users from users.xlsx file"""
-    possible_paths = [
-        "users.xlsx",
-        "./users.xlsx",
-        "data/users.xlsx",
-        "./data/users.xlsx",
-        Path(__file__).parent / "users.xlsx",
-        Path(__file__).parent / "data" / "users.xlsx",
-    ]
-    
-    for path in possible_paths:
-        if os.path.exists(path):
-            df = load_excel_data(path)
-            if df is not None:
-                required_cols = ['USERNAME', 'PASSWORD', 'ROLE', 'COMPANY', 'REGION', 'ACTIVE', 'DEVICE_FINGERPRINT']
-                for col in required_cols:
-                    if col not in df.columns:
-                        df[col] = ''
-                return df
-    
-    return create_default_users()
-
-def create_default_users():
-    """Create default users if no users.xlsx exists"""
-    default_users = {
-        'USERNAME': ['admin', 'manager', 'engineer', 'subcon'],
-        'PASSWORD': [
-            hashlib.sha256('admin123'.encode()).hexdigest(),
-            hashlib.sha256('manager123'.encode()).hexdigest(),
-            hashlib.sha256('engineer123'.encode()).hexdigest(),
-            hashlib.sha256('subcon123'.encode()).hexdigest(),
-        ],
-        'ROLE': ['admin', 'manager', 'engineer', 'subcontractor'],
-        'COMPANY': ['Globe', 'Nokia', 'Globe', 'Subcon Inc.'],
-        'REGION': ['All', 'NCR', 'NCR', 'Region IV-A'],
-        'ACTIVE': [True, True, True, True],
-        'DEVICE_FINGERPRINT': ['', '', '', ''],
-        'CREATED': [
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        ]
-    }
-    df = pd.DataFrame(default_users)
-    try:
-        if not os.path.exists('data'):
-            os.makedirs('data')
-        df.to_excel('data/users.xlsx', index=False)
-    except:
-        pass
-    return df
-
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def get_device_fingerprint():
-    """Get device fingerprint from session state or generate one"""
-    fp = st.query_params.get('device_fp', None)
-    if fp:
-        st.session_state.device_fingerprint = fp
-    return st.session_state.device_fingerprint
-
-def get_user_by_username(username, users_df):
-    if users_df is None or users_df.empty:
-        return None
-    username_upper = username.strip().upper()
-    user = users_df[users_df['USERNAME'].str.upper() == username_upper]
-    if user.empty:
-        return None
-    return user.iloc[0]
-
-def authenticate_user(username, password, users_df, device_fingerprint):
-    user = get_user_by_username(username, users_df)
-    if user is None:
-        return None
-    if not user.get('ACTIVE', True):
-        return None
-    hashed = hash_password(password)
-    if user['PASSWORD'] != hashed:
-        return None
-    stored_fingerprint = user.get('DEVICE_FINGERPRINT', '')
-    if stored_fingerprint and stored_fingerprint != device_fingerprint:
-        return {'error': 'device_mismatch', 'stored_fingerprint': stored_fingerprint}
-    if not stored_fingerprint and device_fingerprint:
-        update_user_fingerprint(username, device_fingerprint, users_df)
-    return {
-        'username': user['USERNAME'],
-        'role': user['ROLE'],
-        'company': user['COMPANY'],
-        'region': user['REGION'],
-        'device_fingerprint': device_fingerprint,
-    }
-
-def update_user_fingerprint(username, fingerprint, users_df):
-    try:
-        idx = users_df[users_df['USERNAME'].str.upper() == username.upper()].index
-        if len(idx) > 0:
-            users_df.loc[idx[0], 'DEVICE_FINGERPRINT'] = fingerprint
-            save_users_df(users_df)
-            st.session_state.users_df = users_df
-    except Exception as e:
-        st.error(f"Error updating device fingerprint: {str(e)}")
-
-def save_users_df(users_df):
-    try:
-        possible_paths = ["users.xlsx", "data/users.xlsx"]
-        for path in possible_paths:
-            try:
-                users_df.to_excel(path, index=False)
-                return
-            except:
-                continue
-        users_df.to_excel("users.xlsx", index=False)
-    except Exception as e:
-        st.error(f"Failed to save users file: {str(e)}")
-
-def log_audit(username, action, details=""):
-    entry = {
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'username': username,
-        'action': action,
-        'details': details,
-        'session_id': str(uuid.uuid4())[:8]
-    }
-    st.session_state.audit_log.append(entry)
-    if len(st.session_state.audit_log) > 1000:
-        st.session_state.audit_log = st.session_state.audit_log[-1000:]
 
 def safe_str(val):
     if pd.isna(val):
@@ -1142,7 +836,7 @@ def perform_intelligent_search(df, search_input):
         final_mask |= term_mask
     return df[final_mask].copy()
 
-def create_site_card_html(row, search_term="", user_role="subcontractor"):
+def create_site_card_html(row, search_term=""):
     """Create HTML for a site card with the correct column mappings"""
     
     # Get values using the correct column names
@@ -1169,13 +863,6 @@ def create_site_card_html(row, search_term="", user_role="subcontractor"):
     fo_display = fo_onsite if fo_onsite else "No FO assigned"
     contact_display = contact if contact else "No contact"
     
-    # Mask contact for subcontractors
-    if user_role == 'subcontractor' and contact_display and len(contact_display) > 4:
-        if len(contact_display) > 8:
-            contact_display = contact_display[:4] + '****' + contact_display[-4:]
-        else:
-            contact_display = contact_display[:4] + '****'
-    
     # Highlight search terms
     site_display = highlight_text(site, search_term)
     plaid_display = highlight_text(plaid, search_term)
@@ -1198,23 +885,18 @@ def create_site_card_html(row, search_term="", user_role="subcontractor"):
     call_button = ''
     if contact_display and contact_display != "No contact":
         clean_contact = ''.join(ch for ch in contact_display if ch.isdigit() or ch == '+')
-        if clean_contact and user_role in ['admin', 'manager', 'engineer']:
+        if clean_contact:
             call_button = f'<a href="tel:{clean_contact}" class="action-btn btn-call">📞 Call FO</a>'
         else:
             call_button = f'<span class="action-btn btn-disabled">📞 {contact_display}</span>'
     else:
         call_button = '<span class="action-btn btn-disabled">📞 No contact</span>'
     
-    # Role-based access tag
-    role_tag = ''
-    if user_role == 'subcontractor':
-        role_tag = '<span style="background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 0.15rem 0.5rem; border-radius: 40px; font-size: 0.55rem; margin-left: 0.5rem;">Limited Access</span>'
-    
     html = f"""
     <div class="site-card">
         <div class="site-header">
             <div>
-                <span class="site-name">{site_display}{role_tag}</span>
+                <span class="site-name">{site_display}</span>
                 <span class="site-plaid">{plaid_display}</span>
             </div>
         </div>
@@ -1345,7 +1027,6 @@ def create_pdf_export(df, selected_indices):
         content = []
         content.append(Paragraph("📍 GPS Extractor - Site Report", title_style))
         content.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", subtitle_style))
-        content.append(Paragraph(f"Generated by: {st.session_state.username} ({st.session_state.user_role})", subtitle_style))
         content.append(Spacer(1, 20))
         content.append(Paragraph(f"<b>Total Sites:</b> {len(selected_indices)}", styles['Normal']))
         content.append(Spacer(1, 10))
@@ -1367,12 +1048,6 @@ def create_pdf_export(df, selected_indices):
             globe_hub = get_column_value(row, 'NEW ASSIGN HUB')
             contact = get_column_value(row, 'CONTACT NUMBER')
             
-            if st.session_state.user_role == 'subcontractor' and contact:
-                if len(contact) > 8:
-                    contact = contact[:4] + '****' + contact[-4:]
-                else:
-                    contact = contact[:4] + '****'
-                
             table_data.append([
                 get_column_value(row, 'PLAID'),
                 get_column_value(row, 'SITE'),
@@ -1418,130 +1093,10 @@ def create_pdf_export(df, selected_indices):
         return None
 
 # ------------------------------
-# DEVICE FINGERPRINT CAPTURE
-# ------------------------------
-def show_device_fingerprint_capture():
-    """Inject JavaScript to capture device fingerprint"""
-    fingerprint_js = """
-    <script>
-    function getFingerprint() {
-        var screen = window.screen;
-        var nav = navigator;
-        var fingerprint = [
-            nav.userAgent,
-            nav.platform,
-            nav.language,
-            screen.width + 'x' + screen.height,
-            screen.colorDepth,
-            new Date().getTimezoneOffset(),
-            nav.hardwareConcurrency || 'unknown',
-            nav.deviceMemory || 'unknown'
-        ].join('|');
-        var hash = 0;
-        for (var i = 0; i < fingerprint.length; i++) {
-            var char = fingerprint.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash;
-        }
-        return 'device_' + Math.abs(hash).toString(16);
-    }
-    var fp = getFingerprint();
-    sessionStorage.setItem('device_fingerprint', fp);
-    var url = new URL(window.location);
-    url.searchParams.set('device_fp', fp);
-    window.history.replaceState({}, '', url);
-    </script>
-    """
-    components.html(fingerprint_js, height=0)
-    fp = st.query_params.get('device_fp', None)
-    if fp:
-        st.session_state.device_fingerprint = fp
-    return st.session_state.device_fingerprint
-
-# ------------------------------
-# LOGIN PAGE
-# ------------------------------
-def show_login():
-    device_fp = show_device_fingerprint_capture()
-    
-    st.markdown("""
-    <div class="login-container">
-        <div class="login-logo">
-            <div class="login-logo-icon">📍</div>
-            <div class="login-title">GPS Extractor</div>
-            <div class="login-subtitle">Globe FO Engineer Contact Management</div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    users_df = load_users()
-    st.session_state.users_df = users_df
-    
-    if users_df is None or users_df.empty:
-        st.error("❌ User database not found. Please contact administrator.")
-        return
-    
-    with st.form("login_form"):
-        username = st.text_input("Username", placeholder="Enter your username")
-        password = st.text_input("Password", type="password", placeholder="Enter your password")
-        submit = st.form_submit_button("Sign In", use_container_width=True)
-        
-        if submit:
-            if username and password:
-                if not device_fp:
-                    st.warning("⚠️ Unable to detect device. Please allow browser permissions.")
-                else:
-                    user = authenticate_user(username, password, users_df, device_fp)
-                    if user and isinstance(user, dict) and 'error' in user:
-                        if user['error'] == 'device_mismatch':
-                            st.error("❌ Device not recognized! This account is bound to another device.")
-                            st.markdown("""
-                            <div class="device-warning">
-                                <strong>🔒 Device Lock</strong><br>
-                                This account is bound to a different device. 
-                                Contact your administrator to reset device binding.
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.error("❌ Authentication failed.")
-                    elif user:
-                        st.session_state.logged_in = True
-                        st.session_state.username = user['username']
-                        st.session_state.user_role = user['role']
-                        st.session_state.user_company = user['company']
-                        st.session_state.user_region = user['region']
-                        log_audit(user['username'], 'LOGIN', f"Successful login from {user['role']} role | Device: {device_fp}")
-                        st.rerun()
-                    else:
-                        st.error("❌ Invalid username or password. Please try again.")
-            else:
-                st.warning("⚠️ Please enter both username and password.")
-    
-    if device_fp:
-        st.markdown(f"""
-        <div class="device-info">
-            <strong>Device ID:</strong> {device_fp[:20]}...<br>
-            <small style="color: var(--text-muted);">This device will be bound to your account on first login.</small>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="device-info">
-            ⚠️ Device fingerprint not detected. Please refresh the page.
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("""
-        <div style="text-align: center; margin-top: 1rem; color: var(--text-muted); font-size: 0.8rem;">
-            🔒 Secure Access · Device binding enabled · All activities are logged
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ------------------------------
 # APP HEADER
 # ------------------------------
 def app_header():
-    st.markdown(f"""
+    st.markdown("""
     <div class="app-header">
         <div class="app-header-content">
             <div class="app-logo">
@@ -1549,12 +1104,9 @@ def app_header():
                 <span class="app-logo-text">GPS Extractor</span>
                 <span class="app-logo-badge">FO Engr</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span class="user-info">
-                    👤 {st.session_state.username} · 
-                    <span class="role-badge">{st.session_state.user_role.upper()}</span>
-                </span>
-                <button class="nav-btn logout-btn" onclick="location.href='?logout=true'">🚪 Logout</button>
+            <div class="app-nav">
+                <button class="nav-btn active" onclick="location.href='/'">🏠 Home</button>
+                <button class="nav-btn" onclick="location.href='?page=about'">ℹ️ About</button>
             </div>
         </div>
     </div>
@@ -1564,35 +1116,91 @@ def app_header():
 # BOTTOM NAVIGATION
 # ------------------------------
 def bottom_nav():
-    st.markdown(f"""
+    st.markdown("""
     <div class="bottom-nav">
         <span class="nav-item active">
             <span class="nav-icon">📍</span>
             Sites
         </span>
         <span class="nav-item" style="color: var(--text-muted);">
-            <span class="nav-icon">🔒</span>
-            {st.session_state.username[:8]}
+            <span class="nav-icon">🔍</span>
+            Search
         </span>
     </div>
     """, unsafe_allow_html=True)
 
 # ------------------------------
-# AUDIT LOG
+# ABOUT PAGE
 # ------------------------------
-def show_audit_log():
+def show_about():
+    app_header()
+    
+    st.markdown("""
+    <div style="text-align: center; padding: 1rem 0 1.5rem 0;">
+        <h1 style="font-size: 1.8rem; font-weight: 700; color: #e8e8f0;">📍 GPS Extractor</h1>
+        <p style="font-size: 0.95rem; color: #a0a0b8;">Globe FO Engineer Contact Management</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%); 
+                border-radius: 16px; padding: 1.5rem; border: 1px solid #2a2a44; margin: 0.5rem 0;">
+        <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <div style="flex: 1;">
+                <h2 style="color: #e8e8f0; margin: 0; font-size: 1.2rem;">👨‍💻 Developer</h2>
+                <h3 style="color: #a0a0b8; margin: 0.3rem 0; font-size: 1rem;">Engr. John Carlo Rabanes, ECE</h3>
+                <p style="margin: 0.2rem 0; color: #6b6b85; font-size: 0.85rem;">📧 rabanes.johncarlo4@gmail.com</p>
+                <p style="margin: 0.2rem 0; color: #6b6b85; font-size: 0.85rem;">🏢 Nokia Shanghai Bell</p>
+            </div>
+            <div style="font-size: 3rem;">📡</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        <div style="background: #14141e; border-radius: 12px; padding: 1rem; height: 100%; border: 1px solid #2a2a44;">
+            <h3 style="color: #4f8cf7; font-size: 1rem;">🎯 Mission</h3>
+            <p style="color: #a0a0b8; font-size: 0.85rem; line-height: 1.5;">
+                To empower field operations engineers with seamless access to site information, 
+                enabling efficient navigation and communication for faster response times.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div style="background: #14141e; border-radius: 12px; padding: 1rem; height: 100%; border: 1px solid #2a2a44;">
+            <h3 style="color: #fbbf24; font-size: 1rem;">👁️ Vision</h3>
+            <p style="color: #a0a0b8; font-size: 0.85rem; line-height: 1.5;">
+                To be the leading digital tool for telecommunications field operations, 
+                setting the standard for efficiency and user experience.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown("---")
-    st.subheader("📋 Audit Log")
-    if st.session_state.user_role != 'admin':
-        st.warning("⚠️ Only administrators can view the audit log.")
-        return
-    if st.session_state.audit_log:
-        audit_df = pd.DataFrame(st.session_state.audit_log)
-        st.dataframe(audit_df, use_container_width=True, height=400)
-        csv = audit_df.to_csv(index=False).encode('utf-8')
-        st.download_button("⬇️ Export Audit Log", data=csv, file_name=f"audit_log_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", use_container_width=True)
-    else:
-        st.info("No audit entries yet.")
+    st.subheader("⚡ Features")
+    
+    features = [
+        ("📍 GPS Navigation", "One-click Google Maps"),
+        ("📞 Click-to-Call", "Direct contact dialing"),
+        ("🔍 Smart Search", "Exact match first, then partial"),
+        ("🗺️ Map View", "Interactive site visualization"),
+        ("📄 PDF Export", "Multiple sites export"),
+        ("📱 Mobile Ready", "Fully responsive design"),
+        ("👤 FO Onsite Display", "Shows assigned Field Operations engineer"),
+        ("🌐 Globe Hub Display", "Shows assigned Globe Hub"),
+    ]
+    
+    for icon, name in features:
+        st.markdown(f"**{icon} {name}**")
+    
+    st.markdown("---")
+    st.caption("© 2026 GPS Extractor | Developed for Globe Telecom")
+    
+    bottom_nav()
 
 # ------------------------------
 # MAIN PAGE
@@ -1619,19 +1227,6 @@ def show_main():
         bottom_nav()
         return
     
-    # Apply region restriction for subcontractors
-    user_region = st.session_state.user_region
-    user_role = st.session_state.user_role
-    
-    filtered_df = df.copy()
-    if user_role == 'subcontractor' and user_region != 'All':
-        if 'REGION' in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df['REGION'] == user_region]
-            if len(filtered_df) == 0:
-                st.warning(f"⚠️ No sites available in your assigned region: {user_region}")
-                bottom_nav()
-                return
-    
     # Search Section
     st.markdown('<div class="search-section">', unsafe_allow_html=True)
     col1, col2 = st.columns([3, 1])
@@ -1647,13 +1242,10 @@ def show_main():
         search_btn = st.button("🔍 Search", use_container_width=True)
         clear_btn = st.button("✖ Clear", use_container_width=True)
     
-    access_note = ""
-    if user_role == 'subcontractor':
-        access_note = f" · 🔒 Access restricted to: {user_region}"
-    st.markdown(f"""
+    st.markdown("""
     <div class="search-hint">
         🔍 <strong>Smart Search</strong> · Exact matches first, then partial · Separate with commas: 
-        <code>Min97, SITE001</code>{access_note}
+        <code>Min97, SITE001</code>
     </div>
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1667,8 +1259,7 @@ def show_main():
     if search_btn and search_term:
         st.session_state.search_term = search_term
         st.session_state.has_searched = True
-        st.session_state.search_results = perform_intelligent_search(filtered_df, search_term)
-        log_audit(st.session_state.username, 'SEARCH', f"Searched: '{search_term}'")
+        st.session_state.search_results = perform_intelligent_search(df, search_term)
     
     if st.session_state.has_searched:
         search_results_df = st.session_state.search_results
@@ -1683,14 +1274,6 @@ def show_main():
                 <div class="welcome-hint">💡 Try checking the spelling or use partial matching</div>
             </div>
             """, unsafe_allow_html=True)
-            bottom_nav()
-            return
-        
-        if user_role == 'subcontractor' and user_region != 'All':
-            if 'REGION' in search_results_df.columns:
-                search_results_df = search_results_df[search_results_df['REGION'] == user_region]
-        if len(search_results_df) == 0:
-            st.warning(f"⚠️ No results in your assigned region: {user_region}")
             bottom_nav()
             return
         
@@ -1726,23 +1309,20 @@ def show_main():
         """, unsafe_allow_html=True)
         
         # Filters
-        if user_role in ['admin', 'manager', 'engineer']:
-            col1, col2, col3 = st.columns([2, 2, 1])
-            with col1:
-                if 'REGION' in search_results_df.columns:
-                    regions = ['All'] + sorted(search_results_df['REGION'].dropna().unique().tolist())
-                    selected_region = st.selectbox('Region', regions)
-                    if selected_region != 'All':
-                        search_results_df = search_results_df[search_results_df['REGION'] == selected_region]
-            with col2:
-                if 'TOWERCO' in search_results_df.columns:
-                    towercos = ['All'] + sorted(search_results_df['TOWERCO'].dropna().unique().tolist())
-                    selected_towerco = st.selectbox('TowerCo', towercos)
-                    if selected_towerco != 'All':
-                        search_results_df = search_results_df[search_results_df['TOWERCO'] == selected_towerco]
-            with col3:
-                show_map = st.checkbox('🗺️ Map')
-        else:
+        col1, col2, col3 = st.columns([2, 2, 1])
+        with col1:
+            if 'REGION' in search_results_df.columns:
+                regions = ['All'] + sorted(search_results_df['REGION'].dropna().unique().tolist())
+                selected_region = st.selectbox('Region', regions)
+                if selected_region != 'All':
+                    search_results_df = search_results_df[search_results_df['REGION'] == selected_region]
+        with col2:
+            if 'TOWERCO' in search_results_df.columns:
+                towercos = ['All'] + sorted(search_results_df['TOWERCO'].dropna().unique().tolist())
+                selected_towerco = st.selectbox('TowerCo', towercos)
+                if selected_towerco != 'All':
+                    search_results_df = search_results_df[search_results_df['TOWERCO'] == selected_towerco]
+        with col3:
             show_map = st.checkbox('🗺️ Map')
         
         # Map View
@@ -1762,65 +1342,50 @@ def show_main():
                                 b64 = base64.b64encode(pdf_data).decode()
                                 href = f'<a href="data:application/pdf;base64,{b64}" download="site_report_{datetime.now().strftime("%Y%m%d")}.pdf" class="action-btn btn-map" style="text-decoration:none; text-align:center;">📥 Download PDF</a>'
                                 st.markdown(href, unsafe_allow_html=True)
-                                log_audit(st.session_state.username, 'EXPORT_PDF', f"Exported {len(selected_map)} sites")
         
         # Site Cards
         st.markdown("---")
         records = search_results_df.to_dict(orient="records")
         for row in records:
-            html = create_site_card_html(row, st.session_state.search_term, user_role)
+            html = create_site_card_html(row, st.session_state.search_term)
             st.markdown(html, unsafe_allow_html=True)
         
         # Export
         col1, col2 = st.columns(2)
         with col1:
-            if user_role in ['admin', 'manager', 'engineer']:
-                csv = search_results_df.to_csv(index=False).encode('utf-8')
-                st.download_button("⬇️ CSV Filtered", data=csv, file_name=f"sites_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
-            else:
-                st.info("🔒 Export restricted for subcontractors")
+            csv = search_results_df.to_csv(index=False).encode('utf-8')
+            st.download_button("⬇️ CSV Filtered", data=csv, file_name=f"sites_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
         with col2:
-            if user_role == 'admin':
-                full_csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button("⬇️ CSV All", data=full_csv, file_name=f"all_sites_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
+            full_csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("⬇️ CSV All", data=full_csv, file_name=f"all_sites_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
     
     else:
         # Welcome Screen
         # Count FO Onsite and Hub availability
         fo_count = 0
         hub_count = 0
-        for _, row in filtered_df.iterrows():
+        for _, row in df.iterrows():
             if get_column_value(row, 'NEW ENGINEER_ANM1'):
                 fo_count += 1
             if get_column_value(row, 'NEW ASSIGN HUB'):
                 hub_count += 1
         
         stats = {
-            'total': len(filtered_df),
-            'regions': filtered_df['REGION'].nunique() if 'REGION' in filtered_df.columns else 0,
-            'coords': filtered_df['LATITUDE'].notna().sum() if 'LATITUDE' in filtered_df.columns else 0,
-            'contacts': filtered_df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in filtered_df.columns else 0,
+            'total': len(df),
+            'regions': df['REGION'].nunique() if 'REGION' in df.columns else 0,
+            'coords': df['LATITUDE'].notna().sum() if 'LATITUDE' in df.columns else 0,
+            'contacts': df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in df.columns else 0,
             'fo_onsite': fo_count,
             'globe_hub': hub_count,
         }
         
-        role_message = ""
-        if user_role == 'subcontractor':
-            role_message = f"<br><span style='color: var(--text-muted); font-size: 0.85rem;'>🔒 Access restricted to region: <strong>{user_region}</strong></span>"
-        
-        device_info = ""
-        if st.session_state.device_fingerprint:
-            device_info = f"<br><span style='color: var(--text-muted); font-size: 0.75rem;'>🔐 Device-bound account</span>"
-        
-        st.markdown(f"""
+        st.markdown("""
         <div class="welcome-screen">
             <div class="welcome-icon">📍</div>
             <div class="welcome-title">Welcome to GPS Extractor</div>
             <div class="welcome-subtitle">
                 Search for sites using PLAID or Site Name.<br>
                 Search multiple sites with commas.
-                {role_message}
-                {device_info}
             </div>
             <div class="welcome-hint">
                 💡 Example: <code>Min97, SITE001, PLAID002</code>
@@ -1836,42 +1401,19 @@ def show_main():
             <div class="stat-card"><span class="stat-number">{stats['globe_hub']}</span><span class="stat-label">🌐 With Globe Hub</span></div>
         </div>
         """, unsafe_allow_html=True)
-        
-        if st.session_state.user_role == 'admin':
-            st.markdown("---")
-            if st.button("📋 View Audit Log", use_container_width=True):
-                show_audit_log()
     
     bottom_nav()
-
-# ------------------------------
-# LOGOUT HANDLER
-# ------------------------------
-def handle_logout():
-    if st.session_state.logged_in:
-        log_audit(st.session_state.username, 'LOGOUT', 'User logged out')
-    st.session_state.logged_in = False
-    st.session_state.username = ''
-    st.session_state.user_role = ''
-    st.session_state.user_company = ''
-    st.session_state.user_region = ''
-    st.session_state.page = 'login'
-    st.session_state.has_searched = False
-    st.session_state.search_results = None
-    st.session_state.search_term = ''
 
 # ------------------------------
 # ROUTING
 # ------------------------------
 query_params = st.query_params
-if 'logout' in query_params:
-    handle_logout()
-    st.query_params.clear()
-    st.rerun()
-
-if st.session_state.logged_in:
-    if st.session_state.page == 'login':
-        st.session_state.page = 'main'
-    show_main()
+if 'page' in query_params and query_params['page'] == 'about':
+    st.session_state.page = 'about'
 else:
-    show_login()
+    st.session_state.page = 'main'
+
+if st.session_state.page == 'about':
+    show_about()
+else:
+    show_main()
