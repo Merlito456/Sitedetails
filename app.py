@@ -16,9 +16,6 @@ import json
 import platform
 import sys
 import uuid
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 # ------------------------------
 # PAGE CONFIG
@@ -37,34 +34,62 @@ if 'page' not in st.session_state:
     st.session_state.page = 'main'
 if 'df' not in st.session_state:
     st.session_state.df = None
-if 'generated_tokens' not in st.session_state:
-    st.session_state.generated_tokens = []
 if 'admin_tab' not in st.session_state:
     st.session_state.admin_tab = 0
-if 'token_to_validate' not in st.session_state:
-    st.session_state.token_to_validate = None
-if 'access_token' not in st.session_state:
-    st.session_state.access_token = None
-if 'otp_verified' not in st.session_state:
-    st.session_state.otp_verified = False
-if 'otp_code' not in st.session_state:
-    st.session_state.otp_code = None
-if 'otp_email' not in st.session_state:
-    st.session_state.otp_email = None
+if 'device_fingerprint' not in st.session_state:
+    st.session_state.device_fingerprint = None
+if 'access_granted' not in st.session_state:
+    st.session_state.access_granted = False
 
 # ------------------------------
 # SECURITY CONFIG
 # ------------------------------
 TOKEN_EXPIRY_DAYS = 30
 SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
-OTP_EXPIRY_MINUTES = 10
+
+# ------------------------------
+# DEVICE FINGERPRINT FUNCTIONS
+# ------------------------------
+def get_device_fingerprint():
+    """Get device fingerprint from query params (set by Android app or JavaScript)"""
+    # Try from query params
+    query_params = st.query_params
+    fp = query_params.get('device_fp', None)
+    if fp:
+        st.session_state.device_fingerprint = fp
+        return fp
+    
+    # Try from session
+    if st.session_state.device_fingerprint:
+        return st.session_state.device_fingerprint
+    
+    # Generate fallback (for web testing)
+    import platform
+    info = [
+        platform.system(),
+        platform.node(),
+        platform.release(),
+        str(uuid.getnode()),
+        str(sys.getsizeof(object()))
+    ]
+    info_str = "|".join(str(i) for i in info)
+    fp = hashlib.md5(info_str.encode()).hexdigest()[:16]
+    
+    st.session_state.device_fingerprint = fp
+    return fp
+
+def get_device_id():
+    """Get user-friendly device ID"""
+    fp = get_device_fingerprint()
+    if fp and len(fp) >= 16:
+        return f"DEV-{fp[:8].upper()}-{fp[-8:].upper()}"
+    return "DEV-UNKNOWN"
 
 # ------------------------------
 # EXCEL DATA LOADER
 # ------------------------------
 @st.cache_data
 def load_excel_data(file_path):
-    """Load data from Excel file"""
     try:
         if not os.path.exists(file_path):
             return None
@@ -131,14 +156,11 @@ def get_online_time():
     except:
         return None
 
-def generate_otp():
-    """Generate a 6-digit OTP"""
-    return ''.join([str(secrets.randbelow(10)) for _ in range(6)])
-
-def generate_secure_token(site_plaid, user_email, user_name, allowed_emails=""):
+def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=""):
     """
-    Generate a secure token with email restrictions.
-    This ensures only the specified email can access the site.
+    Generate token with embedded MAC addresses and IMEI numbers.
+    These are pre-approved and cannot be changed by the user.
+    Format: "MAC:AA:BB:CC:DD:EE:FF, IMEI:123456789012345"
     """
     current_time = get_online_time()
     if current_time is None:
@@ -146,11 +168,15 @@ def generate_secure_token(site_plaid, user_email, user_name, allowed_emails=""):
     
     expiry = current_time + timedelta(days=TOKEN_EXPIRY_DAYS)
     
-    # Clean allowed emails
-    emails = []
-    if allowed_emails:
-        email_list = [e.strip().lower() for e in allowed_emails.split(',') if e.strip()]
-        emails = [hashlib.sha256(e.encode()).hexdigest() for e in email_list]
+    # Process device identifiers
+    devices = []
+    if device_identifiers:
+        # Split by comma
+        device_list = [d.strip() for d in device_identifiers.split(',') if d.strip()]
+        for device in device_list:
+            # Hash each device identifier
+            hashed = hashlib.sha256(device.encode()).hexdigest()
+            devices.append(hashed)
     
     payload = {
         'c': current_time.isoformat(),
@@ -158,7 +184,8 @@ def generate_secure_token(site_plaid, user_email, user_name, allowed_emails=""):
         's': site_plaid,
         'u': user_name,
         'a': user_email,
-        'd': emails,  # Allowed emails (hashed)
+        'd': devices,
+        'raw': device_identifiers  # Store for display (optional)
     }
     
     payload_json = json.dumps(payload, separators=(',', ':'))
@@ -168,8 +195,35 @@ def generate_secure_token(site_plaid, user_email, user_name, allowed_emails=""):
     
     return token
 
-def validate_token(token, df):
-    """Validate a token and return site data if valid."""
+def validate_device(device_to_check, allowed_devices_hashed):
+    """
+    Validate a device string against the allowed hashed devices.
+    Supports MAC:XX:XX:XX:XX:XX:XX and IMEI:123456789012345 formats.
+    """
+    if not device_to_check or not allowed_devices_hashed:
+        return False
+    
+    # Try exact match first
+    hashed = hashlib.sha256(device_to_check.encode()).hexdigest()
+    if hashed in allowed_devices_hashed:
+        return True
+    
+    # Try without the prefix (if user just sent MAC or IMEI)
+    if device_to_check.startswith('MAC:'):
+        without_prefix = device_to_check[4:]
+        hashed = hashlib.sha256(without_prefix.encode()).hexdigest()
+        if hashed in allowed_devices_hashed:
+            return True
+    elif device_to_check.startswith('IMEI:'):
+        without_prefix = device_to_check[5:]
+        hashed = hashlib.sha256(without_prefix.encode()).hexdigest()
+        if hashed in allowed_devices_hashed:
+            return True
+    
+    return False
+
+def validate_token(token, df, device_fingerprint=None):
+    """Validate token and automatically check device fingerprint"""
     try:
         token = token.strip()
         if '%' in token:
@@ -199,7 +253,8 @@ def validate_token(token, df):
         site_plaid = payload.get('s')
         user_name = payload.get('u')
         user_email = payload.get('a')
-        allowed_emails = payload.get('d', [])
+        allowed_devices = payload.get('d', [])
+        raw_devices = payload.get('raw', '')
         
         if not all([created_str, expires_str, site_plaid]):
             return None, "Missing required token data"
@@ -211,14 +266,21 @@ def validate_token(token, df):
         try:
             created = datetime.fromisoformat(created_str)
             expires = datetime.fromisoformat(expires_str)
-        except ValueError as e:
-            return None, f"Invalid date format in token: {str(e)}"
+        except ValueError:
+            return None, "Invalid date format"
         
         if current_time > expires:
-            return None, f"Token expired on {expires.strftime('%B %d, %Y at %I:%M %p')}"
+            return None, f"Token expired on {expires.strftime('%B %d, %Y')}"
         
         if current_time < created - timedelta(minutes=5):
-            return None, "Token is from the future - possible fraud attempt"
+            return None, "Token is from the future - possible fraud"
+        
+        # DEVICE VALIDATION - Check MAC/IMEI against allowed list
+        if allowed_devices and device_fingerprint:
+            if not validate_device(device_fingerprint, allowed_devices):
+                return None, "Device not authorized. MAC Address or IMEI not recognized."
+        elif allowed_devices:
+            return None, "Device verification required. Please ensure your device is registered."
         
         site_data = get_site_by_plaid(df, site_plaid)
         if site_data is None:
@@ -228,24 +290,56 @@ def validate_token(token, df):
         site_data['_user_name'] = user_name
         site_data['_token_created'] = created_str
         site_data['_token_expires'] = expires_str
-        site_data['_device_restricted'] = bool(allowed_emails)
-        site_data['_device_count'] = len(allowed_emails)
+        site_data['_device_restricted'] = bool(allowed_devices)
+        site_data['_device_count'] = len(allowed_devices)
+        site_data['_raw_devices'] = raw_devices
         
         return site_data, None
         
     except Exception as e:
-        return None, f"Token validation error: {str(e)}"
+        return None, f"Validation error: {str(e)}"
 
-def send_otp_email(email, otp_code, site_name):
-    """Send OTP to user's email"""
-    try:
-        # For production, use a proper SMTP service or email API
-        # This is a placeholder - you'd need to configure your email service
-        st.info(f"📧 OTP sent to {email}: {otp_code}")
-        return True
-    except Exception as e:
-        st.error(f"Failed to send OTP: {str(e)}")
-        return False
+# ------------------------------
+# JAVASCRIPT FOR DEVICE FINGERPRINT (For web testing)
+# ------------------------------
+def inject_device_fingerprint_script():
+    """Capture device fingerprint from browser (for web testing)"""
+    fingerprint_js = """
+    <script>
+    function getDeviceFingerprint() {
+        var screen = window.screen;
+        var nav = navigator;
+        
+        var components = [
+            nav.userAgent,
+            nav.platform,
+            nav.language,
+            screen.width + 'x' + screen.height,
+            screen.colorDepth,
+            new Date().getTimezoneOffset(),
+            nav.hardwareConcurrency || 'unknown',
+            nav.deviceMemory || 'unknown'
+        ];
+        
+        var fingerprint = components.join('|');
+        var hash = 0;
+        for (var i = 0; i < fingerprint.length; i++) {
+            var char = fingerprint.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        var fp = Math.abs(hash).toString(16).padStart(16, '0');
+        
+        var url = new URL(window.location);
+        url.searchParams.set('device_fp', fp);
+        window.history.replaceState({}, '', url);
+        
+        return fp;
+    }
+    getDeviceFingerprint();
+    </script>
+    """
+    components.html(fingerprint_js, height=0)
 
 # ------------------------------
 # DARK THEME CSS
@@ -494,21 +588,27 @@ st.markdown("""
     }
     .batch-result .site-item:last-child { border-bottom: none; }
 
-    .otp-box {
+    .device-info {
         background: #14141e;
         border-radius: 12px;
-        padding: 1rem;
-        border: 2px solid #4f8cf7;
+        padding: 0.8rem;
+        border: 1px solid #34d399;
         margin: 0.5rem 0;
     }
-    .otp-box .title {
-        color: #4f8cf7;
-        font-size: 0.9rem;
-        font-weight: 600;
+    .device-info .label {
+        color: #34d399;
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
-    .otp-box .subtitle {
+    .device-info .value {
+        color: #d0d0e0;
+        font-family: monospace;
+        font-size: 0.85rem;
+    }
+    .device-info .sub {
         color: #8a8aa0;
-        font-size: 0.8rem;
+        font-size: 0.7rem;
     }
 
     @media (min-width: 769px) {
@@ -538,6 +638,8 @@ def app_header():
     time_status = "✅ Online" if online_time else "⚠️ Offline (system time)"
     time_class = "online" if online_time else "offline"
     
+    device_id = get_device_id()
+    
     st.markdown(f"""
     <div class="app-header">
         <div class="app-header-content">
@@ -549,6 +651,9 @@ def app_header():
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                 <span class="time-status">
                     🕐 <span class="{time_class}">{time_status}</span>
+                </span>
+                <span class="time-status" style="font-size:0.6rem; border-color: #34d399;">
+                    📱 <span style="color:#34d399;">{device_id}</span>
                 </span>
                 <button class="btn btn-outline" onclick="location.href='/'">🏠 Home</button>
                 <button class="btn btn-outline" onclick="location.href='?page=admin'">⚙️ Admin</button>
@@ -587,11 +692,21 @@ def show_admin():
     st.markdown("""
     <div class="secure-card">
         <h2>⚙️ Admin Dashboard</h2>
-        <p>Generate secure links with <strong style="color: #4f8cf7;">email-based OTP verification</strong>.</p>
+        <p>Generate secure links with <strong style="color: #34d399;">MAC Address / IMEI</strong> verification.</p>
         <p class="sub-text">
             🔍 Search by PLAID or Site Name · Batch generate links<br>
-            📧 Users must verify their email with a <strong style="color: #fbbf24;">one-time PIN</strong> to access the site
+            📱 Device is verified by <strong style="color: #fbbf24;">MAC Address or IMEI</strong> - No user input required!
         </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Show device info for admin reference
+    device_id = get_device_id()
+    st.markdown(f"""
+    <div class="device-info">
+        <div class="label">📱 Your Device ID (For Testing)</div>
+        <div class="value">{device_id}</div>
+        <div class="sub">For Android app, use actual MAC Address or IMEI</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -653,7 +768,7 @@ def show_admin():
     
     # Tab 1: Single Token
     with tabs[1]:
-        st.subheader("🔑 Generate Single Token with OTP Verification")
+        st.subheader("🔑 Generate Single Token")
         
         sites = get_all_sites(df)
         site_options = {f"{s['site']} ({s['plaid']})": s['plaid'] for s in sites}
@@ -662,37 +777,44 @@ def show_admin():
             selected_site_display = st.selectbox("Select Site", list(site_options.keys()), key="single_site_select")
             selected_site_plaid = site_options[selected_site_display]
             
+            col1, col2 = st.columns(2)
+            with col1:
+                user_email = st.text_input("User Email", placeholder="subcon@company.com", key="single_email")
+            with col2:
+                user_name = st.text_input("User Name", placeholder="John Doe", key="single_name")
+            
             st.markdown("""
-            <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border-color: #4f8cf7;">
-                <p style="color: #4f8cf7; font-weight: 600; margin: 0;">
-                    🔒 <strong style="color: #fbbf24;">Two-Factor Authentication</strong>
+            <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border-color: #34d399;">
+                <p style="color: #34d399; font-weight: 600; margin: 0;">
+                    📱 <strong>MAC Address / IMEI Verification</strong>
                 </p>
                 <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0.3rem 0 0 0;">
-                    Users will receive an OTP to their email. They must enter the OTP to access the site.
+                    Enter the user's actual device identifiers:<br>
+                    <span style="color: #34d399;">MAC Address</span>: <code>AA:BB:CC:DD:EE:FF</code><br>
+                    <span style="color: #fbbf24;">IMEI</span>: <code>123456789012345</code> (15 digits)
                 </p>
             </div>
             """, unsafe_allow_html=True)
             
-            col1, col2 = st.columns(2)
-            with col1:
-                user_email = st.text_input("User Email (OTP will be sent here)", placeholder="subcon@company.com", key="single_email")
-            with col2:
-                user_name = st.text_input("User Name", placeholder="John Doe", key="single_name")
-            
-            allowed_emails = st.text_input(
-                "Authorized Email(s) (comma separated)",
-                placeholder="subcon@company.com, engineer@company.com",
-                key="single_allowed",
-                help="Only these email addresses can receive OTP and access the site"
+            device_identifiers = st.text_area(
+                "Device Identifiers (one per line, or comma separated)",
+                placeholder="MAC:AA:BB:CC:DD:EE:FF\nIMEI:123456789012345\nMAC:11:22:33:44:55:66",
+                key="single_devices",
+                help="Format: MAC:AA:BB:CC:DD:EE:FF or IMEI:123456789012345"
             )
             
             if st.button("🔗 Generate Link", key="single_generate", use_container_width=True):
-                if user_email and user_name and selected_site_plaid and allowed_emails:
+                if user_email and user_name and selected_site_plaid and device_identifiers:
+                    # Clean the input - remove newlines and extra spaces
+                    clean_devices = device_identifiers.replace('\n', ',').replace(' ', '')
+                    # Remove duplicate commas
+                    clean_devices = ','.join([d.strip() for d in clean_devices.split(',') if d.strip()])
+                    
                     token = generate_secure_token(
                         selected_site_plaid, 
                         user_email, 
                         user_name, 
-                        allowed_emails
+                        clean_devices
                     )
                     base_url = st.get_option('server.baseUrlPath') or ""
                     link = f"{base_url}/?token={token}"
@@ -705,7 +827,7 @@ def show_admin():
                     else:
                         expiry = datetime.utcnow() + timedelta(days=TOKEN_EXPIRY_DAYS)
                     
-                    email_count = len([e for e in allowed_emails.split(',') if e.strip()])
+                    device_count = len([d for d in clean_devices.split(',') if d.strip()])
                     
                     col1, col2 = st.columns(2)
                     with col1:
@@ -723,11 +845,11 @@ def show_admin():
                             <div style="color: #d0d0e0;">📧 Email: {user_email}</div>
                             <div style="color: #d0d0e0;">⏰ Expires: {expiry.strftime('%B %d, %Y at %I:%M %p UTC')}</div>
                             <div style="color: #d0d0e0;">📍 Site: {selected_site_display}</div>
-                            <div style="color: #34d399;">📧 Allowed Emails: {email_count}</div>
+                            <div style="color: #34d399;">📱 Devices: {device_count}</div>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                    st.info("🔒 This link requires email verification. The user must enter the OTP sent to their email.")
+                    st.info("🔒 This link is bound to specific MAC Addresses and/or IMEI numbers. Only registered devices can access.")
                 else:
                     st.warning("⚠️ Please fill in all required fields")
         else:
@@ -735,7 +857,7 @@ def show_admin():
     
     # Tab 2: Batch Generate
     with tabs[2]:
-        st.subheader("📦 Batch Generate Links with OTP Verification")
+        st.subheader("📦 Batch Generate Links")
         
         st.markdown("""
         <div class="secure-card" style="background: #14141e; padding: 1rem;">
@@ -759,19 +881,21 @@ def show_admin():
         with col2:
             batch_name = st.text_input("User Name", placeholder="John Doe", key="batch_name")
         
-        batch_allowed = st.text_input(
-            "Authorized Emails (comma separated - applies to all)",
-            placeholder="subcon@company.com, engineer@company.com",
-            key="batch_allowed"
+        batch_devices = st.text_area(
+            "Device Identifiers (one per line, or comma separated - applies to all)",
+            placeholder="MAC:AA:BB:CC:DD:EE:FF\nIMEI:123456789012345",
+            key="batch_devices"
         )
         
         if st.button("🔗 Generate All Links", key="batch_generate", use_container_width=True):
             if not batch_input:
                 st.warning("⚠️ Please enter at least one PLAID or Site Name")
-            elif not batch_email or not batch_name or not batch_allowed:
+            elif not batch_email or not batch_name or not batch_devices:
                 st.warning("⚠️ Please fill in all fields")
             else:
                 items = [item.strip() for item in batch_input.split(',') if item.strip()]
+                clean_devices = batch_devices.replace('\n', ',').replace(' ', '')
+                clean_devices = ','.join([d.strip() for d in clean_devices.split(',') if d.strip()])
                 
                 if not items:
                     st.warning("⚠️ No valid entries found")
@@ -784,7 +908,7 @@ def show_admin():
                         if site_data:
                             plaid = safe_str(site_data.get('PLAID', ''))
                             site_name = safe_str(site_data.get('SITE', ''))
-                            token = generate_secure_token(plaid, batch_email, batch_name, batch_allowed)
+                            token = generate_secure_token(plaid, batch_email, batch_name, clean_devices)
                             base_url = st.get_option('server.baseUrlPath') or ""
                             link = f"{base_url}/?token={token}"
                             results.append({
@@ -799,7 +923,7 @@ def show_admin():
                             if site_data:
                                 plaid = safe_str(site_data.get('PLAID', ''))
                                 site_name = safe_str(site_data.get('SITE', ''))
-                                token = generate_secure_token(plaid, batch_email, batch_name, batch_allowed)
+                                token = generate_secure_token(plaid, batch_email, batch_name, clean_devices)
                                 base_url = st.get_option('server.baseUrlPath') or ""
                                 link = f"{base_url}/?token={token}"
                                 results.append({
@@ -947,10 +1071,16 @@ def display_site_card(site_data):
     """, unsafe_allow_html=True)
 
 # ------------------------------
-# SITE VIEWER PAGE - OTP VERIFICATION
+# SITE VIEWER PAGE
 # ------------------------------
 def show_site_viewer(token):
+    # Inject device fingerprint script (for web testing)
+    inject_device_fingerprint_script()
+    
     app_header()
+    
+    # Get device fingerprint
+    device_fp = get_device_fingerprint()
     
     df = st.session_state.df
     if df is None:
@@ -981,15 +1111,21 @@ def show_site_viewer(token):
         except:
             pass
     
-    # Validate token
-    site_data, error = validate_token(token, df)
+    # Validate token with device fingerprint
+    site_data, error = validate_token(token, df, device_fp)
     
     if error:
         st.markdown(f"""
         <div class="secure-card" style="border-color: #ef4444;">
             <h2 style="color: #ef4444;">🔒 Access Denied</h2>
             <p style="color: #d0d0e0;">{error}</p>
-            <p style="color: #8a8aa0; font-size: 0.85rem;">The link may have expired or been invalidated.</p>
+            <p style="color: #8a8aa0; font-size: 0.85rem;">
+                Your device could not be verified. Please ensure your device is registered.
+            </p>
+            <div style="background: #1a1a2e; border-radius: 8px; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #2a2a44;">
+                <div style="color: #34d399; font-size: 0.7rem;">Your Device ID: <code style="color: #60a5fa;">{get_device_id()}</code></div>
+                <div style="color: #8a8aa0; font-size: 0.6rem;">Contact the administrator to register this device</div>
+            </div>
             <br>
             <button class="btn btn-primary" onclick="location.href='/'">🏠 Return to Home</button>
         </div>
@@ -1006,62 +1142,8 @@ def show_site_viewer(token):
         """, unsafe_allow_html=True)
         return
     
-    # Check if OTP verification is needed
-    if site_data.get('_device_restricted', False):
-        # OTP Verification required
-        if not st.session_state.otp_verified:
-            st.markdown("""
-            <div class="secure-card" style="border-color: #4f8cf7;">
-                <h2 style="color: #4f8cf7;">📧 Email Verification Required</h2>
-                <p style="color: #c0c0d0;">
-                    An OTP has been sent to your email. Please enter it to verify your identity.
-                </p>
-                <p style="color: #8a8aa0; font-size: 0.85rem;">
-                    <strong style="color: #fbbf24;">Note:</strong> This ensures only the authorized person can access the site.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Show OTP input
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                otp_input = st.text_input("Enter OTP Code", placeholder="123456", max_chars=6, key="otp_input")
-            
-            with col2:
-                if st.button("📧 Resend OTP", use_container_width=True):
-                    # Generate and send new OTP
-                    otp_code = generate_otp()
-                    st.session_state.otp_code = otp_code
-                    st.session_state.otp_email = site_data.get('_user_email', '')
-                    
-                    # Send OTP
-                    send_otp_email(
-                        site_data.get('_user_email', ''),
-                        otp_code,
-                        site_data.get('SITE', 'Site')
-                    )
-                    st.success("✅ New OTP sent to your email!")
-                    st.rerun()
-            
-            if st.button("🔓 Verify & Access", key="verify_otp", use_container_width=True):
-                if otp_input:
-                    if otp_input == st.session_state.otp_code:
-                        st.session_state.otp_verified = True
-                        st.success("✅ OTP verified successfully!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Invalid OTP. Please try again.")
-                else:
-                    st.warning("⚠️ Please enter the OTP code.")
-            
-            return
-        else:
-            # OTP already verified - show site
-            display_site_content(site_data)
-    else:
-        # No OTP required - show site directly
-        display_site_content(site_data)
+    # Success - display site
+    display_site_content(site_data)
 
 def display_site_content(site_data):
     """Display site content after successful validation"""
@@ -1072,7 +1154,11 @@ def display_site_content(site_data):
     else:
         time_source = "⚠️ Time source: System (offline - contact admin)"
     
-    device_status = "✅ Email Verified" if site_data.get('_device_restricted', False) else "ℹ️ No verification"
+    device_status = "✅ Device Verified" if site_data.get('_device_restricted', False) else "ℹ️ No device restriction"
+    device_count = site_data.get('_device_count', 0)
+    
+    # Show raw devices if available
+    raw_devices = site_data.get('_raw_devices', '')
     
     st.markdown(f"""
     <div class="secure-card" style="border-color: #34d399;">
@@ -1095,7 +1181,11 @@ def display_site_content(site_data):
                 </span>
                 <br>
                 <span style="color: #34d399; font-size: 0.7rem;">
-                    {device_status}
+                    {device_status} {f"({device_count} device(s))" if device_count > 0 else ""}
+                </span>
+                <br>
+                <span style="color: #8a8aa0; font-size: 0.6rem;">
+                    📱 Device: {get_device_id()}
                 </span>
             </div>
         </div>
@@ -1187,7 +1277,7 @@ def display_site_content(site_data):
             st.markdown(f"""
             <div style="color: #6b6b85; font-size: 0.7rem; text-align: center; margin-top: 1rem; padding: 0.5rem; border-top: 1px solid #2a2a44;">
                 🔒 Secure access granted · Created: {created.strftime('%B %d, %Y')} · Expires: {expires.strftime('%B %d, %Y')}
-                {" · 📧 Email verified" if site_data.get('_device_restricted', False) else ""}
+                {" · 📱 Device verified" if site_data.get('_device_restricted', False) else ""}
             </div>
             """, unsafe_allow_html=True)
         except:
@@ -1210,6 +1300,9 @@ def bottom_nav():
 # MAIN
 # ------------------------------
 def show_main():
+    # Inject device fingerprint script (for web testing)
+    inject_device_fingerprint_script()
+    
     app_header()
     
     query_params = st.query_params
@@ -1226,7 +1319,7 @@ def show_main():
         <p class="sub-text">
             ⏰ Time is verified online to prevent fraud<br>
             🔒 Each link is unique and expires after 30 days<br>
-            📧 <strong style="color: #fbbf24;">Two-Factor Authentication</strong> via email OTP
+            📱 <strong style="color: #34d399;">MAC Address / IMEI</strong> verification
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1247,7 +1340,7 @@ def show_main():
     st.markdown("""
     <div style="text-align: center; color: #8a8aa0; font-size: 0.8rem; margin-top: 1rem;">
         🔒 All access is encrypted and time-verified<br>
-        Links expire after 30 days • OTP verification required
+        Links expire after 30 days • MAC/IMEI verification
     </div>
     """, unsafe_allow_html=True)
     
@@ -1258,11 +1351,40 @@ def show_main():
     bottom_nav()
 
 # ------------------------------
+# API ENDPOINT FOR ANDROID APP
+# ------------------------------
+def api_validate():
+    """
+    API endpoint for Android app validation
+    This should be called via POST from the Android app
+    """
+    # This is a simplified version - in production, you'd use Flask/FastAPI
+    try:
+        # Get data from query params or POST data
+        if st.query_params.get('api') == 'validate':
+            # For demo, we'll simulate a response
+            st.json({
+                'success': True,
+                'message': 'API endpoint for Android app',
+                'data': {
+                    'site': 'Sample Site',
+                    'plaid': 'SAMPLE001'
+                }
+            })
+    except Exception as e:
+        st.json({
+            'success': False,
+            'error': str(e)
+        })
+
+# ------------------------------
 # ROUTING
 # ------------------------------
 query_params = st.query_params
 
-if 'page' in query_params and query_params['page'] == 'admin':
+if 'api' in query_params and query_params['api'] == 'validate':
+    api_validate()
+elif 'page' in query_params and query_params['page'] == 'admin':
     show_admin()
 elif 'token' in query_params and query_params['token']:
     show_site_viewer(query_params['token'])
