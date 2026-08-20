@@ -34,9 +34,9 @@ if 'page' not in st.session_state:
 # ------------------------------
 # COLUMN MAPPINGS - Based on your actual Excel
 # ------------------------------
-# Column S = NEW ENGINEER_ANM1 = FO ONSITE (STRICTLY use this)
-# Column U = CONTACT NUMBER = FO NUMBER
-# Column R = NEW ENGINEER_AH = AH (not used for FO ONSITE)
+# Column S = NEW ENGINEER_ANM1 (with 1 space - you fixed it)
+# Column U = CONTACT NUMBER
+# Column R = NEW ENGINEER_AH
 
 # ------------------------------
 # DARK THEME CUSTOM CSS
@@ -693,18 +693,44 @@ def safe_str(val):
         return ""
     return str(val)
 
-def get_column_value(row_dict, column_name, default=""):
+def find_column(row_dict, column_names):
     """
-    Safely get value from a row dictionary.
-    Tries exact match, then case-insensitive match.
+    Find a column in the row dictionary by trying multiple possible names.
+    Returns the matched column name or None.
     """
-    if column_name in row_dict:
-        return safe_str(row_dict[column_name])
+    row_keys = list(row_dict.keys())
     
-    # Case-insensitive match
-    for key in row_dict.keys():
-        if key.strip().upper() == column_name.strip().upper():
-            return safe_str(row_dict[key])
+    # Try exact matches first
+    for name in column_names:
+        if name in row_dict:
+            return name
+    
+    # Try case-insensitive and normalized matches
+    for name in column_names:
+        name_normalized = name.strip().upper().replace('  ', ' ').replace('  ', ' ')
+        for key in row_keys:
+            key_normalized = key.strip().upper().replace('  ', ' ').replace('  ', ' ')
+            if key_normalized == name_normalized:
+                return key
+            # Also try contains match
+            if name_normalized in key_normalized or key_normalized in name_normalized:
+                return key
+    
+    return None
+
+def get_column_value(row_dict, possible_names, default=""):
+    """
+    Safely get value from a row dictionary using multiple possible column names.
+    """
+    if isinstance(possible_names, str):
+        possible_names = [possible_names]
+    
+    # Try to find the column
+    matched_col = find_column(row_dict, possible_names)
+    
+    if matched_col and matched_col in row_dict:
+        val = row_dict[matched_col]
+        return safe_str(val)
     
     return default
 
@@ -753,24 +779,37 @@ def create_site_card_html(row_dict, search_term=""):
     """Create HTML for a site card"""
     
     # Basic site info
-    plaid = get_column_value(row_dict, 'PLAID')
-    site = get_column_value(row_dict, 'SITE')
-    region = get_column_value(row_dict, 'REGION')
-    province = get_column_value(row_dict, 'PROVINCE')
-    municipality = get_column_value(row_dict, 'MUNICIPALITY')
-    barangay = get_column_value(row_dict, 'BARANGAY')
-    territory = get_column_value(row_dict, 'TERRITORY')
-    lat = get_column_value(row_dict, 'LATITUDE')
-    lon = get_column_value(row_dict, 'LONGITUDE')
-    site_add = get_column_value(row_dict, 'SITE_ADD')
-    assign_hub = get_column_value(row_dict, 'ASSIGN_HUB')
-    towerco = get_column_value(row_dict, 'TOWERCO')
+    plaid = get_column_value(row_dict, ['PLAID'])
+    site = get_column_value(row_dict, ['SITE'])
+    region = get_column_value(row_dict, ['REGION'])
+    province = get_column_value(row_dict, ['PROVINCE'])
+    municipality = get_column_value(row_dict, ['MUNICIPALITY'])
+    barangay = get_column_value(row_dict, ['BARANGAY'])
+    territory = get_column_value(row_dict, ['TERRITORY'])
+    lat = get_column_value(row_dict, ['LATITUDE'])
+    lon = get_column_value(row_dict, ['LONGITUDE'])
+    site_add = get_column_value(row_dict, ['SITE_ADD', 'SITE ADD'])
+    assign_hub = get_column_value(row_dict, ['ASSIGN_HUB', 'ASSIGN HUB'])
+    towerco = get_column_value(row_dict, ['TOWERCO'])
     
     # STRICTLY USE COLUMN S = NEW ENGINEER_ANM1 for FO ONSITE
-    fo_onsite = get_column_value(row_dict, 'NEW ENGINEER_ANM1')
+    # Try multiple variations of the column name (with 1 space, 2 spaces, underscores)
+    fo_onsite = get_column_value(row_dict, [
+        'NEW ENGINEER_ANM1',      # With 1 space (your fixed version)
+        'NEW  ENGINEER_ANM1',     # With 2 spaces (original version)
+        'NEW_ENGINEER_ANM1',      # With underscore
+        'NEW ENGINEER ANM1',      # With spaces instead of underscore
+        'ENGINEER_ANM1',          # Partial match
+        'ANM1',                   # Just the suffix
+    ])
     
     # Column U = CONTACT NUMBER for FO NUMBER
-    contact = get_column_value(row_dict, 'CONTACT NUMBER')
+    contact = get_column_value(row_dict, [
+        'CONTACT NUMBER',
+        'CONTACT_NUMBER',
+        'CONTACT NO',
+        'CONTACT'
+    ])
     
     # Display values
     fo_display = fo_onsite if fo_onsite else "No FO assigned"
@@ -957,11 +996,16 @@ def create_pdf_export(df, selected_indices):
         
         for idx, row in selected_df.iterrows():
             row_dict = row.to_dict()
-            fo_onsite = get_column_value(row_dict, 'NEW ENGINEER_ANM1')
-            assign_hub = get_column_value(row_dict, 'ASSIGN_HUB')
-            contact = get_column_value(row_dict, 'CONTACT NUMBER')
-            lat_val = get_column_value(row_dict, 'LATITUDE')
-            lon_val = get_column_value(row_dict, 'LONGITUDE')
+            fo_onsite = get_column_value(row_dict, [
+                'NEW ENGINEER_ANM1',
+                'NEW  ENGINEER_ANM1',
+                'NEW_ENGINEER_ANM1',
+                'NEW ENGINEER ANM1'
+            ])
+            assign_hub = get_column_value(row_dict, ['ASSIGN_HUB', 'ASSIGN HUB'])
+            contact = get_column_value(row_dict, ['CONTACT NUMBER', 'CONTACT_NUMBER', 'CONTACT NO'])
+            lat_val = get_column_value(row_dict, ['LATITUDE'])
+            lon_val = get_column_value(row_dict, ['LONGITUDE'])
             
             try:
                 if lat_val and lon_val:
@@ -971,9 +1015,9 @@ def create_pdf_export(df, selected_indices):
                 pass
             
             table_data.append([
-                get_column_value(row_dict, 'PLAID'),
-                get_column_value(row_dict, 'SITE'),
-                get_column_value(row_dict, 'REGION'),
+                get_column_value(row_dict, ['PLAID']),
+                get_column_value(row_dict, ['SITE']),
+                get_column_value(row_dict, ['REGION']),
                 fo_onsite if fo_onsite else 'No FO assigned',
                 assign_hub if assign_hub else 'Not assigned',
                 contact if contact else 'No contact',
@@ -1151,15 +1195,31 @@ def show_main():
     
     # Show debug info - Column S checker
     with st.expander("🔧 Column Debug - Check Column S (NEW ENGINEER_ANM1)", expanded=False):
-        if 'NEW ENGINEER_ANM1' in df.columns:
-            st.success("✅ Column 'NEW ENGINEER_ANM1' found in your Excel file!")
+        st.markdown("**Looking for column variations:**")
+        variations = ['NEW ENGINEER_ANM1', 'NEW  ENGINEER_ANM1', 'NEW_ENGINEER_ANM1', 'NEW ENGINEER ANM1']
+        
+        found_col = None
+        for var in variations:
+            for col in df.columns:
+                if col.strip().upper() == var.strip().upper():
+                    found_col = col
+                    break
+                if var.strip().upper() in col.strip().upper():
+                    found_col = col
+                    break
+            if found_col:
+                break
+        
+        if found_col:
+            st.success(f"✅ Found column: `{found_col}`")
             # Show sample values
-            sample_values = df['NEW ENGINEER_ANM1'].dropna().head(10).tolist()
-            st.markdown(f"**Sample values from Column S:**")
-            for val in sample_values:
-                st.markdown(f"- `{val}`")
-            
-            if len(sample_values) == 0:
+            sample_values = df[found_col].dropna().head(10).tolist()
+            if sample_values:
+                st.markdown(f"**Sample values from Column S:**")
+                for val in sample_values:
+                    st.markdown(f"- `{val}`")
+                st.markdown(f"**Total rows with values:** {df[found_col].notna().sum()}")
+            else:
                 st.warning("⚠️ Column S has no values - all are empty/NaN")
         else:
             st.error("❌ Column 'NEW ENGINEER_ANM1' NOT found in your Excel file!")
@@ -1226,9 +1286,15 @@ def show_main():
         contact_count = 0
         for _, row in search_results_df.iterrows():
             row_dict = row.to_dict()
-            if get_column_value(row_dict, 'NEW ENGINEER_ANM1'):
+            fo_val = get_column_value(row_dict, [
+                'NEW ENGINEER_ANM1',
+                'NEW  ENGINEER_ANM1',
+                'NEW_ENGINEER_ANM1',
+                'NEW ENGINEER ANM1'
+            ])
+            if fo_val:
                 fo_count += 1
-            if get_column_value(row_dict, 'CONTACT NUMBER'):
+            if get_column_value(row_dict, ['CONTACT NUMBER', 'CONTACT_NUMBER', 'CONTACT NO']):
                 contact_count += 1
         
         stats = {
@@ -1305,9 +1371,15 @@ def show_main():
         contact_count = 0
         for _, row in df.iterrows():
             row_dict = row.to_dict()
-            if get_column_value(row_dict, 'NEW ENGINEER_ANM1'):
+            fo_val = get_column_value(row_dict, [
+                'NEW ENGINEER_ANM1',
+                'NEW  ENGINEER_ANM1',
+                'NEW_ENGINEER_ANM1',
+                'NEW ENGINEER ANM1'
+            ])
+            if fo_val:
                 fo_count += 1
-            if get_column_value(row_dict, 'CONTACT NUMBER'):
+            if get_column_value(row_dict, ['CONTACT NUMBER', 'CONTACT_NUMBER', 'CONTACT NO']):
                 contact_count += 1
         
         stats = {
