@@ -1,76 +1,927 @@
 import streamlit as st
 import pandas as pd
+import base64
 from pathlib import Path
+from datetime import datetime
+import plotly.graph_objects as go
 import os
+import re
+import hashlib
+import uuid
+import json
+import streamlit.components.v1 as components
 
 # ------------------------------
 # PAGE CONFIG
 # ------------------------------
 st.set_page_config(
-    page_title="GPS Extractor • Data Mapper",
+    page_title="GPS Extractor • Globe FO",
     page_icon="📍",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 # ------------------------------
-# DARK THEME
+# SESSION STATE INIT
+# ------------------------------
+if 'page' not in st.session_state:
+    st.session_state.page = 'login'
+if 'df' not in st.session_state:
+    st.session_state.df = None
+if 'users_df' not in st.session_state:
+    st.session_state.users_df = None
+if 'search_term' not in st.session_state:
+    st.session_state.search_term = ''
+if 'has_searched' not in st.session_state:
+    st.session_state.has_searched = False
+if 'search_results' not in st.session_state:
+    st.session_state.search_results = None
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'username' not in st.session_state:
+    st.session_state.username = ''
+if 'user_role' not in st.session_state:
+    st.session_state.user_role = ''
+if 'user_company' not in st.session_state:
+    st.session_state.user_company = ''
+if 'user_region' not in st.session_state:
+    st.session_state.user_region = ''
+if 'audit_log' not in st.session_state:
+    st.session_state.audit_log = []
+if 'device_fingerprint' not in st.session_state:
+    st.session_state.device_fingerprint = None
+
+# ------------------------------
+# COLUMN MAPPINGS (Based on actual Excel file)
+# ------------------------------
+COLUMN_MAPPINGS = {
+    'PLAID': 'PLAID',
+    'SITE': 'SITE',
+    'REGION': 'REGION',
+    'PROVINCE': 'PROVINCE',
+    'MUNICIPALITY': 'MUNICIPALITY',
+    'BARANGAY': 'BARANGAY',
+    'TERRITORY': 'TERRITORY',
+    'LATITUDE': 'LATITUDE',
+    'LONGITUDE': 'LONGITUDE',
+    'SITE_ADD': 'SITE_ADD',
+    'ASSIGNED_HUB': 'ASSIGNED_HUB',
+    'TOWERCO': 'TOWERCO',
+    'NEW_ASSIGN_HUB': 'NEW ASSIGN HUB',  # Column M - GLOBE HUB
+    'FO_ONSITE': 'NEW ENGINEER_ANM1',     # Column S - FO ONSITE
+    'CONTACT_NUMBER': 'CONTACT NUMBER',   # Column U - FO NUMBER
+}
+
+# Display names for the UI
+DISPLAY_NAMES = {
+    'NEW ASSIGN HUB': '🌐 GLOBE HUB',
+    'NEW ENGINEER_ANM1': '👤 FO ONSITE',
+    'CONTACT NUMBER': '📞 FO NUMBER',
+}
+
+# ------------------------------
+# DARK THEME CUSTOM CSS
 # ------------------------------
 st.markdown("""
     <style>
+    /* ========================================
+       CSS VARIABLES
+       ======================================== */
+    :root {
+        --bg-primary: #0a0a0f;
+        --bg-secondary: #14141e;
+        --bg-card: #1a1a2e;
+        --bg-card-hover: #222244;
+        --bg-input: #1e1e32;
+        --text-primary: #e8e8f0;
+        --text-secondary: #a0a0b8;
+        --text-muted: #6b6b85;
+        --border-color: #2a2a44;
+        --accent-blue: #4f8cf7;
+        --accent-blue-hover: #3a7bd5;
+        --accent-green: #34d399;
+        --accent-green-hover: #2bb386;
+        --accent-purple: #8b5cf6;
+        --accent-red: #ef4444;
+        --accent-orange: #f59e0b;
+        --shadow-color: rgba(0, 0, 0, 0.5);
+        --highlight-yellow: #fbbf24;
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+    }
+
     .main .block-container {
-        padding: 1rem 1.5rem;
-        background: #0a0a0f;
+        padding: 0.5rem 0.8rem 5rem 0.8rem;
+        background: var(--bg-primary);
+        max-width: 100% !important;
     }
+
     .stApp {
-        background: #0a0a0f;
+        background: var(--bg-primary);
     }
-    h1, h2, h3 {
-        color: #e8e8f0 !important;
+
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* ========================================
+       LOGIN PAGE
+       ======================================== */
+    .login-container {
+        max-width: 400px;
+        margin: 2rem auto;
+        padding: 2rem;
+        background: var(--bg-secondary);
+        border-radius: 20px;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 8px 30px var(--shadow-color);
     }
-    p, li {
-        color: #a0a0b8 !important;
+
+    .login-logo {
+        text-align: center;
+        margin-bottom: 2rem;
     }
-    .stDataFrame {
-        background: #14141e !important;
-        border: 1px solid #2a2a44 !important;
-        border-radius: 12px !important;
+
+    .login-logo-icon {
+        font-size: 3rem;
     }
-    .column-card {
-        background: #1a1a2e;
-        border-radius: 12px;
+
+    .login-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-top: 0.5rem;
+    }
+
+    .login-subtitle {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        margin-top: 0.3rem;
+    }
+
+    .login-input {
+        width: 100%;
         padding: 0.8rem 1rem;
-        margin: 0.3rem 0;
-        border: 1px solid #2a2a44;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        margin-bottom: 1rem;
+        transition: all 0.2s;
+    }
+
+    .login-input:focus {
+        border-color: var(--accent-blue);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.15);
+    }
+
+    .login-btn {
+        width: 100%;
+        padding: 0.8rem;
+        background: var(--accent-blue);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .login-btn:hover {
+        background: var(--accent-blue-hover);
+        transform: scale(1.02);
+    }
+
+    .login-error {
+        color: var(--accent-red);
+        font-size: 0.85rem;
+        text-align: center;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background: rgba(239, 68, 68, 0.1);
+        border-radius: 8px;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .device-info {
+        background: var(--bg-card);
+        border-radius: 8px;
+        padding: 0.8rem;
+        margin: 0.5rem 0;
+        border: 1px solid var(--border-color);
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .device-info strong {
+        color: var(--text-primary);
+    }
+    .device-warning {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid var(--accent-red);
+        border-radius: 8px;
+        padding: 0.8rem;
+        margin: 0.5rem 0;
+        color: var(--accent-red);
+        font-size: 0.85rem;
+    }
+
+    /* ========================================
+       APP HEADER
+       ======================================== */
+    .app-header {
+        background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%);
+        padding: 0.8rem 1rem;
+        margin: -0.5rem -0.8rem 1rem -0.8rem;
+        border-bottom: 1px solid var(--border-color);
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    .app-header-content {
         display: flex;
+        align-items: center;
         justify-content: space-between;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .app-logo {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .app-logo-icon {
+        font-size: 1.5rem;
+    }
+
+    .app-logo-text {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+
+    .app-logo-badge {
+        background: rgba(79, 140, 247, 0.2);
+        color: var(--accent-blue);
+        padding: 0.15rem 0.6rem;
+        border-radius: 40px;
+        font-size: 0.6rem;
+        font-weight: 500;
+        border: 1px solid rgba(79, 140, 247, 0.2);
+        margin-left: 0.3rem;
+    }
+
+    .app-nav {
+        display: flex;
+        gap: 0.3rem;
         align-items: center;
     }
-    .column-name {
-        color: #e8e8f0;
+
+    .user-info {
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        margin-right: 0.5rem;
+        padding: 0.3rem 0.8rem;
+        background: var(--bg-card);
+        border-radius: 40px;
+        border: 1px solid var(--border-color);
+    }
+
+    .user-info .role-badge {
+        color: var(--accent-blue);
         font-weight: 600;
     }
-    .column-sample {
-        color: #4f8cf7;
+
+    .nav-btn {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        padding: 0.4rem 0.8rem;
+        border-radius: 40px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        white-space: nowrap;
+    }
+
+    .nav-btn:hover, .nav-btn.active {
+        background: var(--bg-card);
+        border-color: var(--accent-blue);
+        color: var(--text-primary);
+    }
+
+    .logout-btn {
+        border-color: var(--accent-red);
+        color: var(--accent-red);
+    }
+
+    .logout-btn:hover {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: var(--accent-red);
+        color: var(--accent-red);
+    }
+
+    /* ========================================
+       SEARCH SECTION
+       ======================================== */
+    .search-section {
+        background: var(--bg-secondary);
+        border-radius: 16px;
+        padding: 1rem;
+        border: 1px solid var(--border-color);
+        margin-bottom: 1rem;
+    }
+
+    .search-hint {
+        color: var(--text-muted);
+        font-size: 0.7rem;
+        margin-top: 0.3rem;
+        padding: 0 0.3rem;
+    }
+
+    .search-hint code {
+        background: var(--bg-input);
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+    }
+
+    .search-bar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .search-input-wrapper {
+        flex: 1;
+        position: relative;
+    }
+
+    .search-input-wrapper .search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: 1rem;
+    }
+
+    .search-input-wrapper input {
+        width: 100%;
+        padding: 0.7rem 0.7rem 0.7rem 2.5rem;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        transition: all 0.2s;
+        outline: none;
+    }
+
+    .search-input-wrapper input:focus {
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.15);
+    }
+
+    .search-input-wrapper input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .search-actions {
+        display: flex;
+        gap: 0.4rem;
+    }
+
+    .search-btn, .clear-btn {
+        padding: 0.7rem 1rem;
+        border-radius: 12px;
+        border: none;
+        font-weight: 600;
         font-size: 0.85rem;
-        background: #1e1e32;
-        padding: 0.2rem 0.6rem;
-        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+        min-width: 60px;
     }
-    .mapped-badge {
-        background: #34d399;
-        color: #0a0a0f;
-        padding: 0.15rem 0.6rem;
-        border-radius: 40px;
-        font-size: 0.65rem;
-        font-weight: 600;
-    }
-    .unmapped-badge {
-        background: #ef4444;
+
+    .search-btn {
+        background: var(--accent-blue);
         color: white;
+    }
+
+    .search-btn:hover {
+        background: var(--accent-blue-hover);
+        transform: scale(1.02);
+    }
+
+    .clear-btn {
+        background: var(--bg-card);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+    }
+
+    .clear-btn:hover {
+        background: var(--bg-card-hover);
+        color: var(--text-primary);
+    }
+
+    /* ========================================
+       STATS CARDS
+       ======================================== */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+        margin: 0.5rem 0 1rem 0;
+    }
+
+    .stat-card {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        padding: 0.8rem;
+        border: 1px solid var(--border-color);
+        text-align: center;
+    }
+
+    .stat-number {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: block;
+    }
+
+    .stat-label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        display: block;
+        margin-top: 0.15rem;
+    }
+
+    /* ========================================
+       SITE CARDS
+       ======================================== */
+    .site-card {
+        background: var(--bg-card);
+        border-radius: 16px;
+        padding: 1rem;
+        margin-bottom: 0.8rem;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 20px var(--shadow-color);
+        animation: fadeIn 0.4s ease-out;
+    }
+
+    .site-card:active {
+        transform: scale(0.98);
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .site-header {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .site-name {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        word-break: break-word;
+    }
+
+    .site-plaid {
+        background: rgba(139, 92, 246, 0.2);
+        color: var(--accent-purple);
         padding: 0.15rem 0.6rem;
         border-radius: 40px;
         font-size: 0.65rem;
         font-weight: 600;
+        border: 1px solid rgba(139, 92, 246, 0.2);
+        display: inline-block;
+        margin-left: 0.3rem;
+        white-space: nowrap;
+    }
+
+    .site-location {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+        word-break: break-word;
+    }
+
+    .site-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .tag {
+        padding: 0.15rem 0.6rem;
+        border-radius: 40px;
+        font-size: 0.6rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+    }
+
+    .tag-territory {
+        background: rgba(52, 211, 153, 0.15);
+        color: var(--accent-green);
+        border-color: rgba(52, 211, 153, 0.2);
+    }
+
+    .tag-towerco {
+        background: rgba(251, 191, 36, 0.15);
+        color: var(--highlight-yellow);
+        border-color: rgba(251, 191, 36, 0.2);
+    }
+
+    .site-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.3rem 1rem;
+        margin: 0.5rem 0;
+        font-size: 0.8rem;
+    }
+
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.05rem;
+    }
+
+    .detail-label {
+        color: var(--text-muted);
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .detail-value {
+        color: var(--text-secondary);
+        font-weight: 500;
+        font-size: 0.8rem;
+        word-break: break-word;
+    }
+
+    .detail-value.highlight {
+        color: var(--accent-orange);
+        font-weight: 600;
+    }
+
+    .site-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.7rem;
+    }
+
+    .action-btn {
+        flex: 1;
+        min-width: 100px;
+        padding: 0.5rem 0.8rem;
+        border-radius: 40px;
+        border: none;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        text-align: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+    }
+
+    .action-btn:active {
+        transform: scale(0.95);
+    }
+
+    .btn-map {
+        background: var(--accent-blue);
+        color: white;
+    }
+
+    .btn-map:hover {
+        background: var(--accent-blue-hover);
+        color: white;
+    }
+
+    .btn-call {
+        background: var(--accent-green);
+        color: #0a0a0f;
+    }
+
+    .btn-call:hover {
+        background: var(--accent-green-hover);
+        color: #0a0a0f;
+    }
+
+    .btn-disabled {
+        background: var(--bg-card);
+        color: var(--text-muted);
+        border: 1px solid var(--border-color);
+        cursor: not-allowed;
+    }
+
+    /* ========================================
+       WELCOME SCREEN
+       ======================================== */
+    .welcome-screen {
+        text-align: center;
+        padding: 2rem 1rem;
+        background: var(--bg-secondary);
+        border-radius: 16px;
+        border: 1px solid var(--border-color);
+        margin: 1rem 0;
+    }
+
+    .welcome-icon {
+        font-size: 3.5rem;
+        margin-bottom: 0.8rem;
+    }
+
+    .welcome-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.3rem;
+    }
+
+    .welcome-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        max-width: 400px;
+        margin: 0 auto;
+        line-height: 1.5;
+    }
+
+    .welcome-hint {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        margin-top: 1.2rem;
+        padding: 0.8rem;
+        background: var(--bg-card);
+        border-radius: 8px;
+        border: 1px dashed var(--border-color);
+        display: inline-block;
+    }
+
+    /* ========================================
+       BOTTOM NAVIGATION
+       ======================================== */
+    .bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-around;
+        padding: 0.4rem 0.5rem calc(0.4rem + var(--safe-bottom, 0px));
+        z-index: 1000;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    .nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.1rem;
+        padding: 0.3rem 0.8rem;
+        border-radius: 12px;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: 0.55rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        min-width: 50px;
+    }
+
+    .nav-item .nav-icon {
+        font-size: 1.2rem;
+    }
+
+    .nav-item.active {
+        color: var(--accent-blue);
+    }
+
+    .nav-item:active {
+        transform: scale(0.9);
+    }
+
+    /* ========================================
+       SEARCH HIGHLIGHT
+       ======================================== */
+    .search-highlight {
+        background: var(--highlight-yellow);
+        color: #0a0a0f;
+        padding: 0.05rem 0.2rem;
+        border-radius: 3px;
+        font-weight: 600;
+    }
+
+    /* ========================================
+       WEB APP - DESKTOP
+       ======================================== */
+    @media (min-width: 769px) {
+        .main .block-container {
+            padding: 1rem 2rem 6rem 2rem;
+            max-width: 1200px !important;
+            margin: 0 auto;
+        }
+
+        .app-header {
+            padding: 0.8rem 2rem;
+            margin: -0.5rem -2rem 1.5rem -2rem;
+        }
+
+        .app-logo-text {
+            font-size: 1.3rem;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+        }
+
+        .stat-card {
+            padding: 1.2rem;
+        }
+
+        .site-card {
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .site-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent-purple);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px var(--shadow-color);
+        }
+
+        .site-name {
+            font-size: 1.2rem;
+        }
+
+        .site-details {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .site-actions {
+            gap: 0.8rem;
+        }
+
+        .action-btn {
+            flex: 0 1 auto;
+            min-width: 140px;
+            padding: 0.6rem 1.2rem;
+            font-size: 0.85rem;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-map:hover {
+            box-shadow: 0 4px 15px rgba(79, 140, 247, 0.3);
+        }
+
+        .btn-call:hover {
+            box-shadow: 0 4px 15px rgba(52, 211, 153, 0.3);
+        }
+
+        .welcome-screen {
+            padding: 4rem 2rem;
+        }
+
+        .welcome-icon {
+            font-size: 5rem;
+        }
+        .welcome-title {
+            font-size: 2rem;
+        }
+        .welcome-subtitle {
+            font-size: 1.1rem;
+        }
+
+        .bottom-nav {
+            display: none;
+        }
+
+        .search-section {
+            padding: 1.5rem;
+        }
+
+        .search-input-wrapper input {
+            padding: 0.8rem 0.8rem 0.8rem 3rem;
+            font-size: 1rem;
+        }
+
+        .search-btn, .clear-btn {
+            padding: 0.8rem 1.5rem;
+            font-size: 0.95rem;
+            min-width: 80px;
+        }
+
+        .login-container {
+            padding: 3rem;
+        }
+    }
+
+    /* ========================================
+       TABLET
+       ======================================== */
+    @media (min-width: 481px) and (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .site-details {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .bottom-nav .nav-item {
+            font-size: 0.6rem;
+        }
+        .bottom-nav .nav-item .nav-icon {
+            font-size: 1.3rem;
+        }
+    }
+
+    /* ========================================
+       SMALL PHONE
+       ======================================== */
+    @media (max-width: 380px) {
+        .app-logo-text {
+            font-size: 0.9rem;
+        }
+        .app-logo-badge {
+            font-size: 0.5rem;
+            padding: 0.1rem 0.4rem;
+        }
+        .nav-btn {
+            font-size: 0.65rem;
+            padding: 0.3rem 0.6rem;
+        }
+        .search-btn, .clear-btn {
+            font-size: 0.7rem;
+            padding: 0.6rem 0.7rem;
+            min-width: 50px;
+        }
+        .site-name {
+            font-size: 0.9rem;
+        }
+        .site-details {
+            grid-template-columns: 1fr 1fr;
+        }
+        .action-btn {
+            min-width: 70px;
+            font-size: 0.65rem;
+            padding: 0.4rem 0.6rem;
+        }
+        .login-container {
+            padding: 1.5rem;
+            margin: 1rem;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -79,258 +930,948 @@ st.markdown("""
 # FUNCTIONS
 # ------------------------------
 @st.cache_data
-def load_excel_file(file):
-    """Load Excel file and show columns"""
+def load_excel_data(file_path):
+    """Load data from Excel file using the correct column mappings"""
     try:
-        df = pd.read_excel(file, engine='openpyxl')
+        if not os.path.exists(file_path):
+            return None
+        df = pd.read_excel(file_path, engine='openpyxl')
+        df.columns = df.columns.str.strip()
         return df
     except Exception as e:
-        st.error(f"Error loading file: {str(e)}")
+        st.error(f"❌ Error loading file: {str(e)}")
         return None
 
-def detect_column_mappings(df):
-    """Detect which columns contain what data"""
-    mappings = {
-        'PLAID': {'keywords': ['PLAID', 'PLID', 'SITE ID', 'ID'], 'found': None},
-        'SITE': {'keywords': ['SITE', 'SITE NAME', 'SITENAME', 'SITE_NAME'], 'found': None},
-        'REGION': {'keywords': ['REGION', 'REG'], 'found': None},
-        'PROVINCE': {'keywords': ['PROVINCE', 'PROV'], 'found': None},
-        'MUNICIPALITY': {'keywords': ['MUNICIPALITY', 'MUN', 'CITY', 'MUNICIPAL'], 'found': None},
-        'BARANGAY': {'keywords': ['BARANGAY', 'BRGY', 'BAR'], 'found': None},
-        'TERRITORY': {'keywords': ['TERRITORY', 'TERR'], 'found': None},
-        'LATITUDE': {'keywords': ['LATITUDE', 'LAT', 'LAT'], 'found': None},
-        'LONGITUDE': {'keywords': ['LONGITUDE', 'LONG', 'LON', 'LNG'], 'found': None},
-        'SITE_ADD': {'keywords': ['SITE_ADD', 'ADDRESS', 'SITE ADDRESS', 'LOCATION'], 'found': None},
-        'ASSIGNED_HUB': {'keywords': ['ASSIGNED HUB', 'ASSIGNED_HUB', 'HUB', 'CURRENT HUB'], 'found': None},
-        'TOWERCO': {'keywords': ['TOWERCO', 'TOWER CO', 'TOWER', 'TOWER COMPANY'], 'found': None},
-        'NEW_ASSIGN_HUB': {'keywords': ['NEW ASSIGN HUB', 'NEW_ASSIGN_HUB', 'NEW HUB', 'NEW HUB'], 'found': None},
-        'FO_ONSITE': {'keywords': ['FO ONSITE', 'NEW ENGINEER_ANM1', 'ONSITE', 'ENGINEER', 'FO', 'FIELD OPERATIONS'], 'found': None},
-        'CONTACT_NUMBER': {'keywords': ['CONTACT NUMBER', 'CONTACT', 'PHONE', 'MOBILE', 'CELL', 'CONTACT NO'], 'found': None},
+def load_users():
+    """Load users from users.xlsx file"""
+    possible_paths = [
+        "users.xlsx",
+        "./users.xlsx",
+        "data/users.xlsx",
+        "./data/users.xlsx",
+        Path(__file__).parent / "users.xlsx",
+        Path(__file__).parent / "data" / "users.xlsx",
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            df = load_excel_data(path)
+            if df is not None:
+                required_cols = ['USERNAME', 'PASSWORD', 'ROLE', 'COMPANY', 'REGION', 'ACTIVE', 'DEVICE_FINGERPRINT']
+                for col in required_cols:
+                    if col not in df.columns:
+                        df[col] = ''
+                return df
+    
+    return create_default_users()
+
+def create_default_users():
+    """Create default users if no users.xlsx exists"""
+    default_users = {
+        'USERNAME': ['admin', 'manager', 'engineer', 'subcon'],
+        'PASSWORD': [
+            hashlib.sha256('admin123'.encode()).hexdigest(),
+            hashlib.sha256('manager123'.encode()).hexdigest(),
+            hashlib.sha256('engineer123'.encode()).hexdigest(),
+            hashlib.sha256('subcon123'.encode()).hexdigest(),
+        ],
+        'ROLE': ['admin', 'manager', 'engineer', 'subcontractor'],
+        'COMPANY': ['Globe', 'Nokia', 'Globe', 'Subcon Inc.'],
+        'REGION': ['All', 'NCR', 'NCR', 'Region IV-A'],
+        'ACTIVE': [True, True, True, True],
+        'DEVICE_FINGERPRINT': ['', '', '', ''],
+        'CREATED': [
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        ]
     }
-    
-    # Search for each column
-    for col in df.columns:
-        col_upper = col.upper().strip()
-        for mapping_key, mapping_value in mappings.items():
-            if any(keyword.upper() in col_upper for keyword in mapping_value['keywords']):
-                mapping_value['found'] = col
-                break
-    
-    return mappings
+    df = pd.DataFrame(default_users)
+    try:
+        if not os.path.exists('data'):
+            os.makedirs('data')
+        df.to_excel('data/users.xlsx', index=False)
+    except:
+        pass
+    return df
 
-def show_data_preview(df, selected_columns=None):
-    """Show preview of data"""
-    if selected_columns:
-        preview_df = df[selected_columns].head(10)
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def get_device_fingerprint():
+    """Get device fingerprint from session state or generate one"""
+    fp = st.query_params.get('device_fp', None)
+    if fp:
+        st.session_state.device_fingerprint = fp
+    return st.session_state.device_fingerprint
+
+def get_user_by_username(username, users_df):
+    if users_df is None or users_df.empty:
+        return None
+    username_upper = username.strip().upper()
+    user = users_df[users_df['USERNAME'].str.upper() == username_upper]
+    if user.empty:
+        return None
+    return user.iloc[0]
+
+def authenticate_user(username, password, users_df, device_fingerprint):
+    user = get_user_by_username(username, users_df)
+    if user is None:
+        return None
+    if not user.get('ACTIVE', True):
+        return None
+    hashed = hash_password(password)
+    if user['PASSWORD'] != hashed:
+        return None
+    stored_fingerprint = user.get('DEVICE_FINGERPRINT', '')
+    if stored_fingerprint and stored_fingerprint != device_fingerprint:
+        return {'error': 'device_mismatch', 'stored_fingerprint': stored_fingerprint}
+    if not stored_fingerprint and device_fingerprint:
+        update_user_fingerprint(username, device_fingerprint, users_df)
+    return {
+        'username': user['USERNAME'],
+        'role': user['ROLE'],
+        'company': user['COMPANY'],
+        'region': user['REGION'],
+        'device_fingerprint': device_fingerprint,
+    }
+
+def update_user_fingerprint(username, fingerprint, users_df):
+    try:
+        idx = users_df[users_df['USERNAME'].str.upper() == username.upper()].index
+        if len(idx) > 0:
+            users_df.loc[idx[0], 'DEVICE_FINGERPRINT'] = fingerprint
+            save_users_df(users_df)
+            st.session_state.users_df = users_df
+    except Exception as e:
+        st.error(f"Error updating device fingerprint: {str(e)}")
+
+def save_users_df(users_df):
+    try:
+        possible_paths = ["users.xlsx", "data/users.xlsx"]
+        for path in possible_paths:
+            try:
+                users_df.to_excel(path, index=False)
+                return
+            except:
+                continue
+        users_df.to_excel("users.xlsx", index=False)
+    except Exception as e:
+        st.error(f"Failed to save users file: {str(e)}")
+
+def log_audit(username, action, details=""):
+    entry = {
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'username': username,
+        'action': action,
+        'details': details,
+        'session_id': str(uuid.uuid4())[:8]
+    }
+    st.session_state.audit_log.append(entry)
+    if len(st.session_state.audit_log) > 1000:
+        st.session_state.audit_log = st.session_state.audit_log[-1000:]
+
+def safe_str(val):
+    if pd.isna(val):
+        return ""
+    return str(val)
+
+def get_column_value(row, column_name, default=""):
+    """Safely get value from a column, handling different column name formats"""
+    if column_name in row:
+        return safe_str(row[column_name])
+    
+    # Try variations of the column name
+    variations = [
+        column_name,
+        column_name.upper(),
+        column_name.lower(),
+        column_name.replace('_', ' '),
+        column_name.replace(' ', '_'),
+    ]
+    
+    for col in row.index:
+        for var in variations:
+            if col.strip().upper() == var.strip().upper():
+                return safe_str(row[col])
+    
+    return default
+
+def highlight_text(text, search_term):
+    if not search_term or not text:
+        return text
+    try:
+        pattern = re.compile(re.escape(search_term), re.IGNORECASE)
+        return pattern.sub(lambda m: f'<span class="search-highlight">{m.group()}</span>', str(text))
+    except:
+        return text
+
+def perform_intelligent_search(df, search_input):
+    if not search_input or search_input.strip() == '':
+        return pd.DataFrame()
+    search_terms = [term.strip() for term in search_input.split(',') if term.strip()]
+    if not search_terms:
+        return pd.DataFrame()
+    final_mask = pd.Series([False] * len(df))
+    for term in search_terms:
+        term_mask = pd.Series([False] * len(df))
+        term_found = False
+        
+        # Search in PLAID
+        if 'PLAID' in df.columns:
+            exact_mask_plaid = df['PLAID'].astype(str).str.strip().str.upper() == term.upper()
+            term_mask |= exact_mask_plaid
+            if exact_mask_plaid.any():
+                term_found = True
+        
+        # Search in SITE
+        if 'SITE' in df.columns:
+            exact_mask_site = df['SITE'].astype(str).str.strip().str.upper() == term.upper()
+            term_mask |= exact_mask_site
+            if exact_mask_site.any():
+                term_found = True
+        
+        # If no exact match, try contains
+        if not term_found:
+            if 'PLAID' in df.columns:
+                term_mask |= df['PLAID'].astype(str).str.contains(term, case=False, na=False)
+            if 'SITE' in df.columns:
+                term_mask |= df['SITE'].astype(str).str.contains(term, case=False, na=False)
+        
+        final_mask |= term_mask
+    return df[final_mask].copy()
+
+def create_site_card_html(row, search_term="", user_role="subcontractor"):
+    """Create HTML for a site card with the correct column mappings"""
+    
+    # Get values using the correct column names
+    plaid = get_column_value(row, 'PLAID')
+    site = get_column_value(row, 'SITE')
+    region = get_column_value(row, 'REGION')
+    province = get_column_value(row, 'PROVINCE')
+    municipality = get_column_value(row, 'MUNICIPALITY')
+    barangay = get_column_value(row, 'BARANGAY')
+    territory = get_column_value(row, 'TERRITORY')
+    lat = get_column_value(row, 'LATITUDE')
+    lon = get_column_value(row, 'LONGITUDE')
+    site_add = get_column_value(row, 'SITE_ADD')
+    assigned_hub = get_column_value(row, 'ASSIGNED_HUB')
+    towerco = get_column_value(row, 'TOWERCO')
+    
+    # CRITICAL: These are the correctly mapped columns
+    new_assign_hub = get_column_value(row, 'NEW ASSIGN HUB')  # Column M - GLOBE HUB
+    fo_onsite = get_column_value(row, 'NEW ENGINEER_ANM1')     # Column S - FO ONSITE
+    contact = get_column_value(row, 'CONTACT NUMBER')          # Column U - FO NUMBER
+    
+    # For display names
+    hub_display = new_assign_hub if new_assign_hub else "Not assigned"
+    fo_display = fo_onsite if fo_onsite else "No FO assigned"
+    contact_display = contact if contact else "No contact"
+    
+    # Mask contact for subcontractors
+    if user_role == 'subcontractor' and contact_display and len(contact_display) > 4:
+        if len(contact_display) > 8:
+            contact_display = contact_display[:4] + '****' + contact_display[-4:]
+        else:
+            contact_display = contact_display[:4] + '****'
+    
+    # Highlight search terms
+    site_display = highlight_text(site, search_term)
+    plaid_display = highlight_text(plaid, search_term)
+    hub_display_highlighted = highlight_text(hub_display, search_term)
+    fo_display_highlighted = highlight_text(fo_display, search_term)
+    
+    # Map button
+    map_button = ''
+    if lat and lon:
+        try:
+            float(lat); float(lon)
+            maps_url = f"https://www.google.com/maps?q={lat},{lon}"
+            map_button = f'<a href="{maps_url}" target="_blank" class="action-btn btn-map">🗺️ Navigate</a>'
+        except:
+            map_button = '<span class="action-btn btn-disabled">⚠️ Invalid</span>'
     else:
-        preview_df = df.head(10)
-    return preview_df
-
-# ------------------------------
-# HEADER
-# ------------------------------
-st.markdown("""
-    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
-        <span style="font-size: 2rem;">🔍</span>
-        <h1 style="display: inline-block; margin: 0; font-weight: 700; color: #e8e8f0;">Data Column Mapper</h1>
-        <span style="background: rgba(79, 140, 247, 0.2); color: #4f8cf7; padding: 0.2rem 1rem; border-radius: 40px; font-size: 0.8rem; font-weight: 500; border: 1px solid rgba(79, 140, 247, 0.2);">Globe FO Engr</span>
-    </div>
-    <p style="color: #a0a0b8; margin-bottom: 1.5rem;">
-        Upload your Excel file to detect and map columns automatically. 
-        This will help identify where your FO Onsite and Hub data is located.
-    </p>
-""", unsafe_allow_html=True)
-
-# ------------------------------
-# FILE UPLOAD
-# ------------------------------
-uploaded_file = st.file_uploader(
-    "Upload your Excel file (.xlsx)",
-    type=["xlsx"],
-    help="Upload the Globe FO Engr Contact Vendor Excel file"
-)
-
-if uploaded_file is not None:
-    # Load the file
-    df = load_excel_file(uploaded_file)
+        map_button = '<span class="action-btn btn-disabled">⚠️ No coords</span>'
     
-    if df is not None:
-        st.success(f"✅ Successfully loaded {len(df)} rows with {len(df.columns)} columns")
+    # Call button
+    call_button = ''
+    if contact_display and contact_display != "No contact":
+        clean_contact = ''.join(ch for ch in contact_display if ch.isdigit() or ch == '+')
+        if clean_contact and user_role in ['admin', 'manager', 'engineer']:
+            call_button = f'<a href="tel:{clean_contact}" class="action-btn btn-call">📞 Call FO</a>'
+        else:
+            call_button = f'<span class="action-btn btn-disabled">📞 {contact_display}</span>'
+    else:
+        call_button = '<span class="action-btn btn-disabled">📞 No contact</span>'
+    
+    # Role-based access tag
+    role_tag = ''
+    if user_role == 'subcontractor':
+        role_tag = '<span style="background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 0.15rem 0.5rem; border-radius: 40px; font-size: 0.55rem; margin-left: 0.5rem;">Limited Access</span>'
+    
+    html = f"""
+    <div class="site-card">
+        <div class="site-header">
+            <div>
+                <span class="site-name">{site_display}{role_tag}</span>
+                <span class="site-plaid">{plaid_display}</span>
+            </div>
+        </div>
+        <div class="site-location">{region} · {province} · {municipality} · {barangay}</div>
+        <div class="site-tags">
+            <span class="tag tag-territory">{territory}</span>
+            <span class="tag tag-towerco">{towerco}</span>
+        </div>
+        <div class="site-details">
+            <div class="detail-item">
+                <span class="detail-label">Address</span>
+                <span class="detail-value">{site_add}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">👤 FO ONSITE</span>
+                <span class="detail-value highlight">{fo_display_highlighted}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">🌐 GLOBE HUB</span>
+                <span class="detail-value highlight">{hub_display_highlighted}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Assigned Hub</span>
+                <span class="detail-value">{assigned_hub}</span>
+            </div>
+        </div>
+        <div class="site-actions">
+            {map_button}
+            {call_button}
+        </div>
+    </div>
+    """
+    return html
+
+def create_map(df, selected_indices=None):
+    map_df = df[df['LATITUDE'].notna() & df['LONGITUDE'].notna()].copy()
+    if map_df.empty:
+        return None
+    fig = go.Figure()
+    fig.add_trace(go.Scattermapbox(
+        lat=map_df['LATITUDE'],
+        lon=map_df['LONGITUDE'],
+        mode='markers',
+        marker=go.scattermapbox.Marker(size=10, color='#4f8cf7', opacity=0.6),
+        text=map_df['SITE'] + '<br>' + map_df['SITE_ADD'],
+        hoverinfo='text',
+        name='All Sites',
+        showlegend=False
+    ))
+    if selected_indices:
+        selected_df = map_df.iloc[selected_indices]
+        fig.add_trace(go.Scattermapbox(
+            lat=selected_df['LATITUDE'],
+            lon=selected_df['LONGITUDE'],
+            mode='markers',
+            marker=go.scattermapbox.Marker(size=15, color='#ef4444', opacity=0.9),
+            text=selected_df['SITE'] + '<br>' + selected_df['SITE_ADD'],
+            hoverinfo='text',
+            name='Selected Sites',
+            showlegend=False
+        ))
+        if len(selected_df) > 1:
+            for i in range(len(selected_df) - 1):
+                fig.add_trace(go.Scattermapbox(
+                    lat=[selected_df.iloc[i]['LATITUDE'], selected_df.iloc[i+1]['LATITUDE']],
+                    lon=[selected_df.iloc[i]['LONGITUDE'], selected_df.iloc[i+1]['LONGITUDE']],
+                    mode='lines',
+                    line=dict(width=2, color='#ef4444'),
+                    showlegend=False,
+                    hoverinfo='skip'
+                ))
+    fig.update_layout(
+        mapbox=dict(
+            style='dark',
+            center=dict(
+                lat=map_df['LATITUDE'].mean() if not map_df.empty else 14.5995,
+                lon=map_df['LONGITUDE'].mean() if not map_df.empty else 121.0139
+            ),
+            zoom=8
+        ),
+        height=400,
+        margin=dict(l=0, r=0, t=0, b=0),
+        hovermode='closest',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+    )
+    return fig
+
+def create_pdf_export(df, selected_indices):
+    try:
+        from reportlab.lib.pagesizes import letter, landscape
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+        from reportlab.lib.units import inch
+        import tempfile
         
-        # Show column detection results
-        st.markdown("---")
-        st.subheader("📋 Column Detection Results")
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+        temp_file.close()
         
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.markdown("**Detected Columns:**")
-            
-            # Detect mappings
-            mappings = detect_column_mappings(df)
-            
-            # Display each column with its mapping status
-            for col in df.columns:
-                col_upper = col.upper().strip()
-                mapped_to = None
-                for key, value in mappings.items():
-                    if value['found'] == col:
-                        mapped_to = key
-                        break
-                
-                # Get sample data
-                sample_value = str(df[col].iloc[0]) if len(df) > 0 else ""
-                if len(sample_value) > 50:
-                    sample_value = sample_value[:50] + "..."
-                
-                status_badge = f'<span class="mapped-badge">✓ {mapped_to}</span>' if mapped_to else '<span class="unmapped-badge">⚠ Unmapped</span>'
-                
-                st.markdown(f"""
-                <div class="column-card">
-                    <div>
-                        <span class="column-name">{col}</span>
-                        <span class="column-sample">{sample_value}</span>
-                    </div>
-                    <div>
-                        {status_badge}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown("**Summary:**")
-            st.markdown(f"• **Total Columns:** {len(df.columns)}")
-            st.markdown(f"• **Mapped Columns:** {sum(1 for v in mappings.values() if v['found'] is not None)}")
-            st.markdown(f"• **Unmapped Columns:** {len(df.columns) - sum(1 for v in mappings.values() if v['found'] is not None)}")
-            
-            st.markdown("---")
-            st.markdown("**🚨 Critical Fields:**")
-            
-            critical_fields = ['FO_ONSITE', 'ASSIGNED_HUB', 'NEW_ASSIGN_HUB']
-            for field in critical_fields:
-                found = mappings[field]['found'] if field in mappings else None
-                status = "✅" if found else "❌"
-                st.markdown(f"{status} **{field}**: {found if found else 'Not found'}")
-        
-        # Data Preview
-        st.markdown("---")
-        st.subheader("📊 Data Preview")
-        
-        # Allow user to select columns for preview
-        all_cols = df.columns.tolist()
-        selected_cols = st.multiselect(
-            "Select columns to preview (or leave empty for all)",
-            options=all_cols,
-            default=all_cols[:10] if len(all_cols) > 10 else all_cols
+        doc = SimpleDocTemplate(
+            temp_file.name,
+            pagesize=landscape(letter),
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=72,
         )
         
-        if selected_cols:
-            preview_df = show_data_preview(df, selected_cols)
-        else:
-            preview_df = show_data_preview(df)
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#e8e8f0'),
+            alignment=1,
+            spaceAfter=30
+        )
+        subtitle_style = ParagraphStyle(
+            'Subtitle',
+            parent=styles['Normal'],
+            fontSize=12,
+            textColor=colors.HexColor('#a0a0b8'),
+            alignment=1,
+            spaceAfter=20
+        )
         
-        st.dataframe(preview_df, use_container_width=True, height=300)
+        content = []
+        content.append(Paragraph("📍 GPS Extractor - Site Report", title_style))
+        content.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", subtitle_style))
+        content.append(Paragraph(f"Generated by: {st.session_state.username} ({st.session_state.user_role})", subtitle_style))
+        content.append(Spacer(1, 20))
+        content.append(Paragraph(f"<b>Total Sites:</b> {len(selected_indices)}", styles['Normal']))
+        content.append(Spacer(1, 10))
         
-        # Help identify missing data
-        st.markdown("---")
-        st.subheader("🔍 Looking for FO Onsite and Hub Data?")
+        selected_df = df.iloc[selected_indices]
+        table_data = [['PLAID', 'Site', 'Region', 'FO Onsite', 'Globe Hub', 'Contact', 'Latitude', 'Longitude']]
         
-        # Check specifically for FO Onsite and Hub columns
-        fo_onsite_col = None
-        assigned_hub_col = None
-        new_hub_col = None
+        for idx, row in selected_df.iterrows():
+            lat_val = get_column_value(row, 'LATITUDE')
+            lon_val = get_column_value(row, 'LONGITUDE')
+            try:
+                if lat_val and lon_val:
+                    lat_val = f"{float(lat_val):.6f}"
+                    lon_val = f"{float(lon_val):.6f}"
+            except:
+                pass
+            
+            fo_onsite = get_column_value(row, 'NEW ENGINEER_ANM1')
+            globe_hub = get_column_value(row, 'NEW ASSIGN HUB')
+            contact = get_column_value(row, 'CONTACT NUMBER')
+            
+            if st.session_state.user_role == 'subcontractor' and contact:
+                if len(contact) > 8:
+                    contact = contact[:4] + '****' + contact[-4:]
+                else:
+                    contact = contact[:4] + '****'
+                
+            table_data.append([
+                get_column_value(row, 'PLAID'),
+                get_column_value(row, 'SITE'),
+                get_column_value(row, 'REGION'),
+                fo_onsite if fo_onsite else 'No FO assigned',
+                globe_hub if globe_hub else 'Not assigned',
+                contact if contact else 'No contact',
+                lat_val,
+                lon_val
+            ])
         
-        for col in df.columns:
-            col_upper = col.upper().strip()
-            if 'FO ONSITE' in col_upper or 'NEW ENGINEER_ANM1' in col_upper or 'ONSITE' in col_upper:
-                fo_onsite_col = col
-            if 'ASSIGNED HUB' in col_upper or 'ASSIGNED_HUB' in col_upper or 'CURRENT HUB' in col_upper:
-                assigned_hub_col = col
-            if 'NEW ASSIGN HUB' in col_upper or 'NEW_ASSIGN_HUB' in col_upper or 'NEW HUB' in col_upper:
-                new_hub_col = col
+        table = Table(table_data, colWidths=[0.8*inch, 1.2*inch, 1*inch, 1.2*inch, 1.2*inch, 1.2*inch, 1*inch, 1*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#e8e8f0')),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#0a0a0f')),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#e8e8f0')),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#2a2a44')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
         
-        if fo_onsite_col:
-            st.success(f"✅ Found FO Onsite column: **{fo_onsite_col}**")
-            st.markdown(f"Sample data: {df[fo_onsite_col].iloc[0] if len(df) > 0 else 'No data'}")
-        else:
-            st.warning("⚠️ FO Onsite column not found. Looking for variations like: 'FO ONSITE', 'NEW ENGINEER_ANM1', 'ONSITE'")
-            st.info("💡 Check if your column might have a different name. Look for columns containing: FO, Engineer, Onsite, Field Operations")
+        content.append(table)
+        doc.build(content)
         
-        st.markdown("---")
+        with open(temp_file.name, 'rb') as f:
+            pdf_data = f.read()
+        os.unlink(temp_file.name)
+        return pdf_data
         
-        if assigned_hub_col:
-            st.success(f"✅ Found Assigned Hub column: **{assigned_hub_col}**")
-            st.markdown(f"Sample data: {df[assigned_hub_col].iloc[0] if len(df) > 0 else 'No data'}")
-        else:
-            st.warning("⚠️ Assigned Hub column not found. Looking for variations like: 'ASSIGNED HUB', 'HUB', 'CURRENT HUB'")
+    except ImportError:
+        st.error("PDF generation requires reportlab. Install with: pip install reportlab")
+        return None
+    except Exception as e:
+        st.error(f"Error generating PDF: {str(e)}")
+        return None
+
+# ------------------------------
+# DEVICE FINGERPRINT CAPTURE
+# ------------------------------
+def show_device_fingerprint_capture():
+    """Inject JavaScript to capture device fingerprint"""
+    fingerprint_js = """
+    <script>
+    function getFingerprint() {
+        var screen = window.screen;
+        var nav = navigator;
+        var fingerprint = [
+            nav.userAgent,
+            nav.platform,
+            nav.language,
+            screen.width + 'x' + screen.height,
+            screen.colorDepth,
+            new Date().getTimezoneOffset(),
+            nav.hardwareConcurrency || 'unknown',
+            nav.deviceMemory || 'unknown'
+        ].join('|');
+        var hash = 0;
+        for (var i = 0; i < fingerprint.length; i++) {
+            var char = fingerprint.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return 'device_' + Math.abs(hash).toString(16);
+    }
+    var fp = getFingerprint();
+    sessionStorage.setItem('device_fingerprint', fp);
+    var url = new URL(window.location);
+    url.searchParams.set('device_fp', fp);
+    window.history.replaceState({}, '', url);
+    </script>
+    """
+    components.html(fingerprint_js, height=0)
+    fp = st.query_params.get('device_fp', None)
+    if fp:
+        st.session_state.device_fingerprint = fp
+    return st.session_state.device_fingerprint
+
+# ------------------------------
+# LOGIN PAGE
+# ------------------------------
+def show_login():
+    device_fp = show_device_fingerprint_capture()
+    
+    st.markdown("""
+    <div class="login-container">
+        <div class="login-logo">
+            <div class="login-logo-icon">📍</div>
+            <div class="login-title">GPS Extractor</div>
+            <div class="login-subtitle">Globe FO Engineer Contact Management</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    users_df = load_users()
+    st.session_state.users_df = users_df
+    
+    if users_df is None or users_df.empty:
+        st.error("❌ User database not found. Please contact administrator.")
+        return
+    
+    with st.form("login_form"):
+        username = st.text_input("Username", placeholder="Enter your username")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        submit = st.form_submit_button("Sign In", use_container_width=True)
         
-        if new_hub_col:
-            st.success(f"✅ Found New Assign Hub column: **{new_hub_col}**")
-            st.markdown(f"Sample data: {df[new_hub_col].iloc[0] if len(df) > 0 else 'No data'}")
-        else:
-            st.warning("⚠️ New Assign Hub column not found. Looking for variations like: 'NEW ASSIGN HUB', 'NEW HUB'")
+        if submit:
+            if username and password:
+                if not device_fp:
+                    st.warning("⚠️ Unable to detect device. Please allow browser permissions.")
+                else:
+                    user = authenticate_user(username, password, users_df, device_fp)
+                    if user and isinstance(user, dict) and 'error' in user:
+                        if user['error'] == 'device_mismatch':
+                            st.error("❌ Device not recognized! This account is bound to another device.")
+                            st.markdown("""
+                            <div class="device-warning">
+                                <strong>🔒 Device Lock</strong><br>
+                                This account is bound to a different device. 
+                                Contact your administrator to reset device binding.
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.error("❌ Authentication failed.")
+                    elif user:
+                        st.session_state.logged_in = True
+                        st.session_state.username = user['username']
+                        st.session_state.user_role = user['role']
+                        st.session_state.user_company = user['company']
+                        st.session_state.user_region = user['region']
+                        log_audit(user['username'], 'LOGIN', f"Successful login from {user['role']} role | Device: {device_fp}")
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid username or password. Please try again.")
+            else:
+                st.warning("⚠️ Please enter both username and password.")
+    
+    if device_fp:
+        st.markdown(f"""
+        <div class="device-info">
+            <strong>Device ID:</strong> {device_fp[:20]}...<br>
+            <small style="color: var(--text-muted);">This device will be bound to your account on first login.</small>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="device-info">
+            ⚠️ Device fingerprint not detected. Please refresh the page.
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("""
+        <div style="text-align: center; margin-top: 1rem; color: var(--text-muted); font-size: 0.8rem;">
+            🔒 Secure Access · Device binding enabled · All activities are logged
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ------------------------------
+# APP HEADER
+# ------------------------------
+def app_header():
+    st.markdown(f"""
+    <div class="app-header">
+        <div class="app-header-content">
+            <div class="app-logo">
+                <span class="app-logo-icon">📍</span>
+                <span class="app-logo-text">GPS Extractor</span>
+                <span class="app-logo-badge">FO Engr</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="user-info">
+                    👤 {st.session_state.username} · 
+                    <span class="role-badge">{st.session_state.user_role.upper()}</span>
+                </span>
+                <button class="nav-btn logout-btn" onclick="location.href='?logout=true'">🚪 Logout</button>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ------------------------------
+# BOTTOM NAVIGATION
+# ------------------------------
+def bottom_nav():
+    st.markdown(f"""
+    <div class="bottom-nav">
+        <span class="nav-item active">
+            <span class="nav-icon">📍</span>
+            Sites
+        </span>
+        <span class="nav-item" style="color: var(--text-muted);">
+            <span class="nav-icon">🔒</span>
+            {st.session_state.username[:8]}
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ------------------------------
+# AUDIT LOG
+# ------------------------------
+def show_audit_log():
+    st.markdown("---")
+    st.subheader("📋 Audit Log")
+    if st.session_state.user_role != 'admin':
+        st.warning("⚠️ Only administrators can view the audit log.")
+        return
+    if st.session_state.audit_log:
+        audit_df = pd.DataFrame(st.session_state.audit_log)
+        st.dataframe(audit_df, use_container_width=True, height=400)
+        csv = audit_df.to_csv(index=False).encode('utf-8')
+        st.download_button("⬇️ Export Audit Log", data=csv, file_name=f"audit_log_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", use_container_width=True)
+    else:
+        st.info("No audit entries yet.")
+
+# ------------------------------
+# MAIN PAGE
+# ------------------------------
+def show_main():
+    app_header()
+    
+    # Load data
+    if st.session_state.df is None:
+        df = load_excel_data("database.xlsx")
+        if df is None:
+            possible_paths = ["data/database.xlsx", "./data/database.xlsx", Path(__file__).parent / "database.xlsx", Path(__file__).parent / "data" / "database.xlsx"]
+            for path in possible_paths:
+                df = load_excel_data(path)
+                if df is not None:
+                    break
+        if df is not None:
+            st.session_state.df = df
+    else:
+        df = st.session_state.df
+    
+    if df is None or df.empty:
+        st.warning("⚠️ No data available. Please check the database file.")
+        bottom_nav()
+        return
+    
+    # Apply region restriction for subcontractors
+    user_region = st.session_state.user_region
+    user_role = st.session_state.user_role
+    
+    filtered_df = df.copy()
+    if user_role == 'subcontractor' and user_region != 'All':
+        if 'REGION' in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df['REGION'] == user_region]
+            if len(filtered_df) == 0:
+                st.warning(f"⚠️ No sites available in your assigned region: {user_region}")
+                bottom_nav()
+                return
+    
+    # Search Section
+    st.markdown('<div class="search-section">', unsafe_allow_html=True)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        search_term = st.text_input(
+            "Search",
+            value=st.session_state.search_term,
+            placeholder="🔍 Search PLAID or Site Name...",
+            label_visibility="collapsed",
+            help="Search multiple sites with commas"
+        )
+    with col2:
+        search_btn = st.button("🔍 Search", use_container_width=True)
+        clear_btn = st.button("✖ Clear", use_container_width=True)
+    
+    access_note = ""
+    if user_role == 'subcontractor':
+        access_note = f" · 🔒 Access restricted to: {user_region}"
+    st.markdown(f"""
+    <div class="search-hint">
+        🔍 <strong>Smart Search</strong> · Exact matches first, then partial · Separate with commas: 
+        <code>Min97, SITE001</code>{access_note}
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    if clear_btn:
+        st.session_state.search_term = ''
+        st.session_state.has_searched = False
+        st.session_state.search_results = None
+        st.rerun()
+    
+    if search_btn and search_term:
+        st.session_state.search_term = search_term
+        st.session_state.has_searched = True
+        st.session_state.search_results = perform_intelligent_search(filtered_df, search_term)
+        log_audit(st.session_state.username, 'SEARCH', f"Searched: '{search_term}'")
+    
+    if st.session_state.has_searched:
+        search_results_df = st.session_state.search_results
+        if search_results_df is None or len(search_results_df) == 0:
+            terms = [term.strip() for term in search_term.split(',') if term.strip()]
+            terms_display = ', '.join([f'"{t}"' for t in terms])
+            st.markdown(f"""
+            <div class="welcome-screen">
+                <div class="welcome-icon">🔍</div>
+                <div class="welcome-title">No Results Found</div>
+                <div class="welcome-subtitle">No sites found matching: {terms_display}</div>
+                <div class="welcome-hint">💡 Try checking the spelling or use partial matching</div>
+            </div>
+            """, unsafe_allow_html=True)
+            bottom_nav()
+            return
         
-        # Export mapping configuration
-        st.markdown("---")
-        st.subheader("📝 Column Mapping Configuration")
+        if user_role == 'subcontractor' and user_region != 'All':
+            if 'REGION' in search_results_df.columns:
+                search_results_df = search_results_df[search_results_df['REGION'] == user_region]
+        if len(search_results_df) == 0:
+            st.warning(f"⚠️ No results in your assigned region: {user_region}")
+            bottom_nav()
+            return
         
-        # Show current mapping
-        mapping_config = {}
-        for key, value in mappings.items():
-            if value['found']:
-                mapping_config[key] = value['found']
+        terms = [term.strip() for term in search_term.split(',') if term.strip()]
+        terms_display = ', '.join([f'"{t}"' for t in terms])
+        st.markdown(f"**Found {len(search_results_df)} site(s)** matching: {terms_display}")
         
-        st.json(mapping_config)
+        # Count FO Onsite and Hub availability
+        fo_count = 0
+        hub_count = 0
+        for _, row in search_results_df.iterrows():
+            if get_column_value(row, 'NEW ENGINEER_ANM1'):
+                fo_count += 1
+            if get_column_value(row, 'NEW ASSIGN HUB'):
+                hub_count += 1
         
-        # Allow manual mapping
-        st.markdown("**Manual Column Mapping:**")
-        st.info("If automatic detection missed a column, you can manually map it below:")
-        
-        # Create mapping interface for critical fields
-        critical_mappings = {
-            'FO_ONSITE': 'FO Onsite (Engineer Name)',
-            'ASSIGNED_HUB': 'Assigned Hub',
-            'NEW_ASSIGN_HUB': 'New Assign Hub',
-            'CONTACT_NUMBER': 'Contact Number',
-            'LATITUDE': 'Latitude',
-            'LONGITUDE': 'Longitude'
+        stats = {
+            'total': len(search_results_df),
+            'regions': search_results_df['REGION'].nunique() if 'REGION' in search_results_df.columns else 0,
+            'coords': search_results_df['LATITUDE'].notna().sum() if 'LATITUDE' in search_results_df.columns else 0,
+            'contacts': search_results_df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in search_results_df.columns else 0,
+            'fo_onsite': fo_count,
+            'globe_hub': hub_count,
         }
         
-        for field_key, field_label in critical_mappings.items():
-            current_value = mappings[field_key]['found'] if field_key in mappings else None
-            options = ['Not Set'] + df.columns.tolist()
-            default_index = 0 if current_value not in df.columns else options.index(current_value)
-            
-            selected = st.selectbox(
-                f"Map **{field_label}** to column:",
-                options=options,
-                index=default_index
-            )
-            
-            if selected != 'Not Set':
-                st.caption(f"Sample: {df[selected].iloc[0] if len(df) > 0 else 'No data'}")
+        st.markdown(f"""
+        <div class="stats-grid">
+            <div class="stat-card"><span class="stat-number">{stats['total']}</span><span class="stat-label">Results</span></div>
+            <div class="stat-card"><span class="stat-number">{stats['regions']}</span><span class="stat-label">Regions</span></div>
+            <div class="stat-card"><span class="stat-number">{stats['fo_onsite']}</span><span class="stat-label">👤 With FO Onsite</span></div>
+            <div class="stat-card"><span class="stat-number">{stats['globe_hub']}</span><span class="stat-label">🌐 With Globe Hub</span></div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Download mapping
+        # Filters
+        if user_role in ['admin', 'manager', 'engineer']:
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                if 'REGION' in search_results_df.columns:
+                    regions = ['All'] + sorted(search_results_df['REGION'].dropna().unique().tolist())
+                    selected_region = st.selectbox('Region', regions)
+                    if selected_region != 'All':
+                        search_results_df = search_results_df[search_results_df['REGION'] == selected_region]
+            with col2:
+                if 'TOWERCO' in search_results_df.columns:
+                    towercos = ['All'] + sorted(search_results_df['TOWERCO'].dropna().unique().tolist())
+                    selected_towerco = st.selectbox('TowerCo', towercos)
+                    if selected_towerco != 'All':
+                        search_results_df = search_results_df[search_results_df['TOWERCO'] == selected_towerco]
+            with col3:
+                show_map = st.checkbox('🗺️ Map')
+        else:
+            show_map = st.checkbox('🗺️ Map')
+        
+        # Map View
+        if show_map and len(search_results_df) > 0:
+            st.markdown("---")
+            st.subheader("🗺️ Site Map Visualization")
+            map_indices = search_results_df[search_results_df['LATITUDE'].notna() & search_results_df['LONGITUDE'].notna()].index.tolist()
+            if map_indices:
+                selected_map = st.multiselect("Highlight sites", options=map_indices, format_func=lambda x: f"{search_results_df.loc[x, 'SITE']}")
+                fig = create_map(search_results_df, selected_map)
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                    if selected_map:
+                        if st.button("📄 Export to PDF"):
+                            pdf_data = create_pdf_export(search_results_df, selected_map)
+                            if pdf_data:
+                                b64 = base64.b64encode(pdf_data).decode()
+                                href = f'<a href="data:application/pdf;base64,{b64}" download="site_report_{datetime.now().strftime("%Y%m%d")}.pdf" class="action-btn btn-map" style="text-decoration:none; text-align:center;">📥 Download PDF</a>'
+                                st.markdown(href, unsafe_allow_html=True)
+                                log_audit(st.session_state.username, 'EXPORT_PDF', f"Exported {len(selected_map)} sites")
+        
+        # Site Cards
         st.markdown("---")
-        if st.button("📥 Download Column Mapping", use_container_width=True):
-            import json
-            json_data = json.dumps(mapping_config, indent=2)
-            st.download_button(
-                label="Download JSON Mapping",
-                data=json_data,
-                file_name="column_mapping.json",
-                mime="application/json"
-            )
+        records = search_results_df.to_dict(orient="records")
+        for row in records:
+            html = create_site_card_html(row, st.session_state.search_term, user_role)
+            st.markdown(html, unsafe_allow_html=True)
+        
+        # Export
+        col1, col2 = st.columns(2)
+        with col1:
+            if user_role in ['admin', 'manager', 'engineer']:
+                csv = search_results_df.to_csv(index=False).encode('utf-8')
+                st.download_button("⬇️ CSV Filtered", data=csv, file_name=f"sites_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
+            else:
+                st.info("🔒 Export restricted for subcontractors")
+        with col2:
+            if user_role == 'admin':
+                full_csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button("⬇️ CSV All", data=full_csv, file_name=f"all_sites_{datetime.now().strftime('%Y%m%d')}.csv", use_container_width=True)
+    
+    else:
+        # Welcome Screen
+        # Count FO Onsite and Hub availability
+        fo_count = 0
+        hub_count = 0
+        for _, row in filtered_df.iterrows():
+            if get_column_value(row, 'NEW ENGINEER_ANM1'):
+                fo_count += 1
+            if get_column_value(row, 'NEW ASSIGN HUB'):
+                hub_count += 1
+        
+        stats = {
+            'total': len(filtered_df),
+            'regions': filtered_df['REGION'].nunique() if 'REGION' in filtered_df.columns else 0,
+            'coords': filtered_df['LATITUDE'].notna().sum() if 'LATITUDE' in filtered_df.columns else 0,
+            'contacts': filtered_df['CONTACT NUMBER'].notna().sum() if 'CONTACT NUMBER' in filtered_df.columns else 0,
+            'fo_onsite': fo_count,
+            'globe_hub': hub_count,
+        }
+        
+        role_message = ""
+        if user_role == 'subcontractor':
+            role_message = f"<br><span style='color: var(--text-muted); font-size: 0.85rem;'>🔒 Access restricted to region: <strong>{user_region}</strong></span>"
+        
+        device_info = ""
+        if st.session_state.device_fingerprint:
+            device_info = f"<br><span style='color: var(--text-muted); font-size: 0.75rem;'>🔐 Device-bound account</span>"
+        
+        st.markdown(f"""
+        <div class="welcome-screen">
+            <div class="welcome-icon">📍</div>
+            <div class="welcome-title">Welcome to GPS Extractor</div>
+            <div class="welcome-subtitle">
+                Search for sites using PLAID or Site Name.<br>
+                Search multiple sites with commas.
+                {role_message}
+                {device_info}
+            </div>
+            <div class="welcome-hint">
+                💡 Example: <code>Min97, SITE001, PLAID002</code>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <div class="stats-grid">
+            <div class="stat-card"><span class="stat-number">{stats['total']}</span><span class="stat-label">Available Sites</span></div>
+            <div class="stat-card"><span class="stat-number">{stats['regions']}</span><span class="stat-label">Regions</span></div>
+            <div class="stat-card"><span class="stat-number">{stats['fo_onsite']}</span><span class="stat-label">👤 With FO Onsite</span></div>
+            <div class="stat-card"><span class="stat-number">{stats['globe_hub']}</span><span class="stat-label">🌐 With Globe Hub</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.session_state.user_role == 'admin':
+            st.markdown("---")
+            if st.button("📋 View Audit Log", use_container_width=True):
+                show_audit_log()
+    
+    bottom_nav()
 
+# ------------------------------
+# LOGOUT HANDLER
+# ------------------------------
+def handle_logout():
+    if st.session_state.logged_in:
+        log_audit(st.session_state.username, 'LOGOUT', 'User logged out')
+    st.session_state.logged_in = False
+    st.session_state.username = ''
+    st.session_state.user_role = ''
+    st.session_state.user_company = ''
+    st.session_state.user_region = ''
+    st.session_state.page = 'login'
+    st.session_state.has_searched = False
+    st.session_state.search_results = None
+    st.session_state.search_term = ''
+
+# ------------------------------
+# ROUTING
+# ------------------------------
+query_params = st.query_params
+if 'logout' in query_params:
+    handle_logout()
+    st.query_params.clear()
+    st.rerun()
+
+if st.session_state.logged_in:
+    if st.session_state.page == 'login':
+        st.session_state.page = 'main'
+    show_main()
 else:
-    st.info("👆 Please upload your Excel file to start the column mapping analysis.")
-
-# ------------------------------
-# FOOTER
-# ------------------------------
-st.markdown("""
-    <hr style="margin-top: 2rem; opacity:0.3; border-color: #2a2a44;">
-    <div style="text-align: center; color: #6b6b85; font-size: 0.8rem; padding: 0.5rem;">
-        GPS Extractor · Column Mapper · Helps identify FO Onsite and Hub data
-    </div>
-""", unsafe_allow_html=True)
+    show_login()
