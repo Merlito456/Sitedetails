@@ -137,7 +137,6 @@ def generate_secure_token(site_plaid, user_email, user_name, mac_addresses="", i
     if mac_addresses:
         mac_list = [m.strip() for m in mac_addresses.split(',') if m.strip()]
         for mac in mac_list:
-            # Validate MAC format (simplified)
             mac_clean = mac.upper().replace('-', ':')
             allowed_devices.append(f"MAC:{mac_clean}")
     
@@ -145,7 +144,6 @@ def generate_secure_token(site_plaid, user_email, user_name, mac_addresses="", i
     if imei_numbers:
         imei_list = [i.strip() for i in imei_numbers.split(',') if i.strip()]
         for imei in imei_list:
-            # Validate IMEI format (15 digits)
             imei_clean = re.sub(r'\D', '', imei)
             allowed_devices.append(f"IMEI:{imei_clean}")
     
@@ -158,9 +156,9 @@ def generate_secure_token(site_plaid, user_email, user_name, mac_addresses="", i
         's': site_plaid,
         'u': user_email,
         'n': user_name,
-        'd': hashed_devices,  # Hashed MAC/IMEI
-        'm': mac_addresses,   # Store plain for display (optional)
-        'i': imei_numbers,    # Store plain for display (optional)
+        'd': hashed_devices,
+        'm': mac_addresses,
+        'i': imei_numbers,
     }
     
     payload_json = json.dumps(payload, separators=(',', ':'))
@@ -171,22 +169,35 @@ def generate_secure_token(site_plaid, user_email, user_name, mac_addresses="", i
     return token
 
 def validate_device(device_to_check, allowed_devices_hashed):
-    """
-    Validate a device string against the allowed hashed devices.
-    Supports MAC:XX:XX:XX:XX:XX:XX and IMEI:123456789012345 formats.
-    """
+    """Validate a device string against the allowed hashed devices."""
     if not device_to_check or not allowed_devices_hashed:
         return False
     
-    # Hash the provided device
-    hashed = hashlib.sha256(device_to_check.encode()).hexdigest()
+    # Clean the device input
+    device_clean = device_to_check.strip().upper()
+    
+    # Try as MAC
+    if ':' in device_clean or '-' in device_clean:
+        device_clean = device_clean.replace('-', ':')
+        device_to_hash = f"MAC:{device_clean}"
+    # Try as IMEI (digits only)
+    elif re.match(r'^\d+$', device_clean):
+        device_to_hash = f"IMEI:{device_clean}"
+    else:
+        # Try both formats
+        device_to_hash_mac = f"MAC:{device_clean}"
+        device_to_hash_imei = f"IMEI:{device_clean}"
+        
+        hashed_mac = hashlib.sha256(device_to_hash_mac.encode()).hexdigest()
+        hashed_imei = hashlib.sha256(device_to_hash_imei.encode()).hexdigest()
+        
+        return hashed_mac in allowed_devices_hashed or hashed_imei in allowed_devices_hashed
+    
+    hashed = hashlib.sha256(device_to_hash.encode()).hexdigest()
     return hashed in allowed_devices_hashed
 
 def validate_token(token, df, provided_device=""):
-    """
-    Validate a token and return site data if valid.
-    Validates provided MAC/IMEI against allowed devices.
-    """
+    """Validate a token and return site data if valid."""
     try:
         token = token.strip()
         if '%' in token:
@@ -239,12 +250,12 @@ def validate_token(token, df, provided_device=""):
         if current_time < created - timedelta(minutes=5):
             return None, "Token is from the future - possible fraud attempt"
         
-        # DEVICE VALIDATION - Check provided MAC/IMEI against allowed list
+        # DEVICE VALIDATION
         if allowed_devices and provided_device:
             if not validate_device(provided_device, allowed_devices):
-                return None, "Device not authorized. Please use your registered device."
+                return None, "Device not authorized. Please use your registered MAC Address or IMEI."
         elif allowed_devices:
-            return None, "Device verification required. Please register your device."
+            return None, "Device verification required. Please enter your MAC Address or IMEI."
         
         site_data = get_site_by_plaid(df, site_plaid)
         if site_data is None:
@@ -1004,7 +1015,7 @@ def display_site_card(site_data):
     """, unsafe_allow_html=True)
 
 # ------------------------------
-# SITE VIEWER PAGE - DEVICE VERIFICATION REQUIRED
+# SITE VIEWER PAGE
 # ------------------------------
 def show_site_viewer(token):
     app_header()
@@ -1081,10 +1092,7 @@ def show_site_viewer(token):
             
             if submitted:
                 if device_input:
-                    # Clean the input
                     device_clean = device_input.strip().upper()
-                    
-                    # Try to validate with the provided device
                     site_data, error = validate_token(token, df, device_clean)
                     
                     if error:
@@ -1142,7 +1150,6 @@ def display_site_content(site_data):
     device_status = "✅ Device Restricted" if site_data.get('_device_restricted', False) else "ℹ️ No device restriction"
     device_count = site_data.get('_device_count', 0)
     
-    # Display MAC and IMEI info if available
     mac_info = ""
     if site_data.get('_mac_addresses'):
         mac_info = f"<div style='color: #34d399; font-size: 0.7rem;'>📱 MAC: {site_data['_mac_addresses']}</div>"
@@ -1181,7 +1188,7 @@ def display_site_content(site_data):
     </div>
     """, unsafe_allow_html=True)
     
-    # Site details (same as before)
+    # Site details
     site_name = safe_str(site_data.get('SITE', ''))
     plaid = safe_str(site_data.get('PLAID', ''))
     region = safe_str(site_data.get('REGION', ''))
