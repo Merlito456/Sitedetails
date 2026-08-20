@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import hashlib
 import secrets
@@ -12,7 +13,6 @@ import requests
 import time
 import urllib.parse
 import json
-import hashlib
 
 # ------------------------------
 # PAGE CONFIG
@@ -50,8 +50,6 @@ SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
 def get_device_fingerprint():
     """
     Get device fingerprint from browser/device info.
-    This simulates MAC address and IMEI collection.
-    In production, you'd need a more sophisticated approach.
     """
     # Try to get from session state first
     if st.session_state.device_fingerprint:
@@ -64,39 +62,23 @@ def get_device_fingerprint():
         st.session_state.device_fingerprint = fp
         return fp
     
-    # Generate a fingerprint from available browser info
-    # In a real implementation, you'd use JavaScript to collect MAC/IMEI
-    # For demo, we'll use a combination of available data
+    # Generate a fingerprint from available data
     import platform
     import sys
     
-    # Get system info (this is a fallback, not real MAC/IMEI)
     info = [
         platform.system(),
         platform.node(),
         platform.release(),
         platform.version(),
         platform.machine(),
-        sys.getsizeof(object())
+        str(sys.getsizeof(object()))
     ]
     info_str = "|".join(str(i) for i in info)
     fp = hashlib.md5(info_str.encode()).hexdigest()[:16]
     
     st.session_state.device_fingerprint = fp
     return fp
-
-def get_device_info_from_fingerprint(fingerprint):
-    """
-    Parse device info from fingerprint hash.
-    This is a simplified version - in production you'd have a proper mapping.
-    """
-    # For demo purposes, we'll just return a formatted string
-    # In production, you'd have a proper device registration system
-    return {
-        'type': 'Device',
-        'id': fingerprint[:8] + '...' + fingerprint[-4:],
-        'fingerprint': fingerprint
-    }
 
 # ------------------------------
 # EXCEL DATA LOADER
@@ -160,7 +142,6 @@ def get_online_time():
         time_apis = [
             "https://worldtimeapi.org/api/timezone/Etc/UTC",
             "https://timeapi.io/api/time/current/utc",
-            "https://api.timezonedb.com/v2.1/get-time-zone?key=&format=json&by=zone&zone=UTC"
         ]
         
         for api in time_apis:
@@ -172,8 +153,6 @@ def get_online_time():
                         return datetime.fromisoformat(data['utc_datetime'].replace('Z', '+00:00'))
                     elif 'dateTime' in data:
                         return datetime.fromisoformat(data['dateTime'].replace('Z', '+00:00'))
-                    elif 'formatted' in data:
-                        return datetime.fromisoformat(data['formatted'].replace('Z', '+00:00'))
                     elif 'unixtime' in data:
                         return datetime.fromtimestamp(data['unixtime'])
             except:
@@ -196,9 +175,7 @@ def generate_secure_token(site_plaid, user_email, user_name, allowed_devices="")
     # Clean allowed devices
     devices = []
     if allowed_devices:
-        # Split by comma and clean
         device_list = [d.strip() for d in allowed_devices.split(',') if d.strip()]
-        # Hash each device ID for security (so we don't store plain MAC/IMEI)
         devices = [hashlib.sha256(d.encode()).hexdigest() for d in device_list]
     
     # Create payload
@@ -208,7 +185,7 @@ def generate_secure_token(site_plaid, user_email, user_name, allowed_devices="")
         's': site_plaid,
         'u': user_email,
         'n': user_name,
-        'd': devices  # List of hashed device identifiers
+        'd': devices
     }
     
     # Convert to JSON string
@@ -268,7 +245,7 @@ def validate_token(token, df, device_fingerprint=None):
         site_plaid = payload.get('s')
         user_email = payload.get('u')
         user_name = payload.get('n')
-        allowed_devices = payload.get('d', [])  # List of hashed device IDs
+        allowed_devices = payload.get('d', [])
         
         if not all([created_str, expires_str, site_plaid]):
             return None, "Missing required token data"
@@ -293,15 +270,12 @@ def validate_token(token, df, device_fingerprint=None):
         if current_time < created - timedelta(minutes=5):
             return None, "Token is from the future - possible fraud attempt"
         
-        # DEVICE VALIDATION: Check if device is allowed
+        # DEVICE VALIDATION
         if allowed_devices and device_fingerprint:
-            # Hash the current device fingerprint
             hashed_device = hashlib.sha256(device_fingerprint.encode()).hexdigest()
-            
             if hashed_device not in allowed_devices:
                 return None, "Device not authorized for this token. Please use an authorized device."
         elif allowed_devices:
-            # Token has device restrictions but no device fingerprint provided
             return None, "Device verification required. Please ensure your device is registered."
         
         # Get site data
@@ -309,7 +283,7 @@ def validate_token(token, df, device_fingerprint=None):
         if site_data is None:
             return None, f"Site not found: {site_plaid}"
         
-        # Add user info to site data
+        # Add user info
         site_data['_user_email'] = user_email
         site_data['_user_name'] = user_name
         site_data['_token_created'] = created_str
@@ -328,16 +302,13 @@ def validate_token(token, df, device_fingerprint=None):
 def inject_device_fingerprint_script():
     """
     Inject JavaScript to capture device fingerprint and send to Streamlit.
-    This is a simplified version - in production, you'd use more sophisticated methods.
     """
     fingerprint_js = """
     <script>
     function getDeviceFingerprint() {
-        // Collect available device/browser information
         var screen = window.screen;
         var nav = navigator;
         
-        // Create a fingerprint from available data
         var components = [
             nav.userAgent,
             nav.platform,
@@ -349,16 +320,6 @@ def inject_device_fingerprint_script():
             nav.deviceMemory || 'unknown'
         ];
         
-        // Try to get additional device info if available
-        try {
-            // Some browsers expose device info via experimental APIs
-            if (nav.mediaDevices && nav.mediaDevices.enumerateDevices) {
-                // This requires user permission, so we'll just note it's available
-                components.push('mediaDevices_available');
-            }
-        } catch(e) {}
-        
-        // Create fingerprint hash
         var fingerprint = components.join('|');
         var hash = 0;
         for (var i = 0; i < fingerprint.length; i++) {
@@ -368,12 +329,10 @@ def inject_device_fingerprint_script():
         }
         var fp = 'device_' + Math.abs(hash).toString(16);
         
-        // Store in session storage
         try {
             sessionStorage.setItem('device_fingerprint', fp);
         } catch(e) {}
         
-        // Send to Streamlit via query param
         var url = new URL(window.location);
         url.searchParams.set('device_fp', fp);
         window.history.replaceState({}, '', url);
@@ -381,20 +340,16 @@ def inject_device_fingerprint_script():
         return fp;
     }
     
-    // Execute immediately
     getDeviceFingerprint();
     </script>
     """
     components.html(fingerprint_js, height=0)
 
 # ------------------------------
-# DARK THEME CSS (condensed for space - same as before)
+# DARK THEME CSS
 # ------------------------------
 st.markdown("""
     <style>
-    /* ========================================
-       GLOBAL STYLES
-       ======================================== */
     .main .block-container {
         padding: 0.5rem 0.8rem 5rem 0.8rem;
         background: #0a0a0f;
@@ -748,7 +703,6 @@ def app_header():
     time_status = "✅ Online" if online_time else "⚠️ Offline (system time)"
     time_class = "online" if online_time else "offline"
     
-    # Get device info
     device_fp = get_device_fingerprint()
     device_display = device_fp[:8] + "..." + device_fp[-4:] if device_fp else "Not detected"
     
@@ -780,7 +734,6 @@ def app_header():
 def show_admin():
     app_header()
     
-    # Load data
     df = load_excel_data("database.xlsx")
     if df is None:
         possible_paths = ["data/database.xlsx", "./data/database.xlsx"]
@@ -890,16 +843,15 @@ def show_admin():
             <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0;">
                 <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0;">
                     📱 Enter allowed device identifiers (MAC addresses and/or IMEI numbers) separated by commas.
-                    <br>Example: <code>AA:BB:CC:DD:EE:FF, 123456789012345, 98:76:54:32:10:AB</code>
+                    <br>Example: <code>AA:BB:CC:DD:EE:FF, 123456789012345</code>
                 </p>
             </div>
             """, unsafe_allow_html=True)
             
             allowed_devices = st.text_input(
                 "Allowed Devices (MAC addresses, IMEI numbers - comma separated)",
-                placeholder="AA:BB:CC:DD:EE:FF, 123456789012345, 98:76:54:32:10:AB",
-                key="single_devices",
-                help="Only these devices will be able to access the site"
+                placeholder="AA:BB:CC:DD:EE:FF, 123456789012345",
+                key="single_devices"
             )
             
             if st.button("🔗 Generate Link", key="single_generate", use_container_width=True):
@@ -916,7 +868,6 @@ def show_admin():
                     else:
                         expiry = datetime.utcnow() + timedelta(days=TOKEN_EXPIRY_DAYS)
                     
-                    # Count devices
                     device_count = len([d for d in allowed_devices.split(',') if d.strip()]) if allowed_devices else 0
                     
                     col1, col2 = st.columns(2)
@@ -1169,12 +1120,10 @@ def display_site_card(site_data):
 # SITE VIEWER PAGE
 # ------------------------------
 def show_site_viewer(token):
-    # Inject device fingerprint script
     inject_device_fingerprint_script()
     
     app_header()
     
-    # Get device fingerprint
     device_fp = get_device_fingerprint()
     
     df = st.session_state.df
@@ -1198,17 +1147,14 @@ def show_site_viewer(token):
         """, unsafe_allow_html=True)
         return
     
-    # Clean the token
     token = token.strip()
     
-    # If the token contains '%', it might be URL encoded
     if '%' in token:
         try:
             token = urllib.parse.unquote(token)
         except:
             pass
     
-    # Validate with device fingerprint
     site_data, error = validate_token(token, df, device_fp)
     
     if error:
@@ -1239,7 +1185,6 @@ def show_site_viewer(token):
     else:
         time_source = "⚠️ Time source: System (offline - contact admin)"
     
-    # Device info
     device_status = "✅ Authorized Device" if site_data.get('_device_restricted', False) else "ℹ️ No device restriction"
     device_count = site_data.get('_device_count', 0)
     
@@ -1271,7 +1216,7 @@ def show_site_viewer(token):
     </div>
     """, unsafe_allow_html=True)
     
-    # Site details (same as before)
+    # Site details
     site_name = safe_str(site_data.get('SITE', ''))
     plaid = safe_str(site_data.get('PLAID', ''))
     region = safe_str(site_data.get('REGION', ''))
@@ -1379,7 +1324,6 @@ def bottom_nav():
 # MAIN
 # ------------------------------
 def show_main():
-    # Inject device fingerprint script
     inject_device_fingerprint_script()
     
     app_header()
