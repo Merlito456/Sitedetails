@@ -34,20 +34,12 @@ if 'page' not in st.session_state:
 # ------------------------------
 # COLUMN MAPPINGS - Based on your actual Excel
 # ------------------------------
-# From your data:
-# Column S = NEW ENGINEER_ANM1 = FO USERNAME (e.g., RODERICK LASTIMOSA)
-# Column U = CONTACT NUMBER = FO NUMBER (e.g., 9176882909)
-# Column M = NEW ASSIGN_HUB = GLOBE HUB
-
-# Display names for the UI
-DISPLAY_NAMES = {
-    'NEW ASSIGN HUB': '🌐 GLOBE HUB',
-    'NEW ENGINEER_ANM1': '👤 FO ONSITE',
-    'CONTACT NUMBER': '📞 FO NUMBER',
-}
+# Column S = NEW ENGINEER_ANM1 = FO ONSITE (STRICTLY use this)
+# Column U = CONTACT NUMBER = FO NUMBER
+# Column R = NEW ENGINEER_AH = AH (not used for FO ONSITE)
 
 # ------------------------------
-# DARK THEME CUSTOM CSS (condensed for space)
+# DARK THEME CUSTOM CSS
 # ------------------------------
 st.markdown("""
     <style>
@@ -613,7 +605,7 @@ st.markdown("""
 
         .site-name { font-size: 1.2rem; }
         .site-details { 
-            grid-template-columns: repeat(4, 1fr); 
+            grid-template-columns: repeat(3, 1fr); 
         }
         .site-actions { gap: 0.8rem; }
 
@@ -774,28 +766,27 @@ def create_site_card_html(row_dict, search_term=""):
     assign_hub = get_column_value(row_dict, 'ASSIGN_HUB')
     towerco = get_column_value(row_dict, 'TOWERCO')
     
-    # CRITICAL COLUMNS - These are the actual mappings from your Excel
-    # Column S = NEW ENGINEER_ANM1 = FO ONSITE (e.g., RODERICK LASTIMOSA)
-    # Column U = CONTACT NUMBER = FO NUMBER (e.g., 9176882909)
-    # Column M = NEW ASSIGN_HUB = GLOBE HUB
+    # STRICTLY USE COLUMN S = NEW ENGINEER_ANM1 for FO ONSITE
     fo_onsite = get_column_value(row_dict, 'NEW ENGINEER_ANM1')
+    
+    # Column U = CONTACT NUMBER for FO NUMBER
     contact = get_column_value(row_dict, 'CONTACT NUMBER')
-    globe_hub = get_column_value(row_dict, 'NEW ASSIGN HUB')
     
     # Display values
     fo_display = fo_onsite if fo_onsite else "No FO assigned"
     contact_display = contact if contact else "No contact"
-    hub_display = globe_hub if globe_hub else "Not assigned"
+    hub_display = assign_hub if assign_hub else "No assigned"
     
     # Highlight search terms
     site_display = highlight_text(site, search_term)
     plaid_display = highlight_text(plaid, search_term)
     fo_display_highlighted = highlight_text(fo_display, search_term)
-    hub_display_highlighted = highlight_text(hub_display, search_term)
     
-    # Check if values are missing for styling
-    fo_missing_class = "missing" if not fo_onsite else "fo-name"
-    hub_missing_class = "missing" if not globe_hub else ""
+    # Styling for FO ONSITE
+    if fo_onsite:
+        fo_class = "fo-name"
+    else:
+        fo_class = "missing"
     
     # Map button
     map_button = ''
@@ -840,15 +831,11 @@ def create_site_card_html(row_dict, search_term=""):
             </div>
             <div class="detail-item">
                 <span class="detail-label">📋 ASSIGN HUB</span>
-                <span class="detail-value">{assign_hub if assign_hub else "Not assigned"}</span>
-            </div>
-            <div class="detail-item">
-                <span class="detail-label">🌐 GLOBE HUB</span>
-                <span class="detail-value highlight {hub_missing_class}">{hub_display_highlighted}</span>
+                <span class="detail-value">{hub_display}</span>
             </div>
             <div class="detail-item">
                 <span class="detail-label">👤 FO ONSITE</span>
-                <span class="detail-value {fo_missing_class}">{fo_display_highlighted}</span>
+                <span class="detail-value {fo_class}">{fo_display_highlighted}</span>
             </div>
             <div class="detail-item">
                 <span class="detail-label">📞 FO NUMBER</span>
@@ -965,14 +952,13 @@ def create_pdf_export(df, selected_indices):
         
         selected_df = df.iloc[selected_indices]
         
-        # Header - Remove AH columns
-        header = ['PLAID', 'SITE', 'REGION', 'FO ONSITE', 'GLOBE HUB', 'CONTACT', 'LATITUDE', 'LONGITUDE']
+        header = ['PLAID', 'SITE', 'REGION', 'FO ONSITE', 'ASSIGN HUB', 'CONTACT', 'LATITUDE', 'LONGITUDE']
         table_data = [header]
         
         for idx, row in selected_df.iterrows():
             row_dict = row.to_dict()
             fo_onsite = get_column_value(row_dict, 'NEW ENGINEER_ANM1')
-            globe_hub = get_column_value(row_dict, 'NEW ASSIGN HUB')
+            assign_hub = get_column_value(row_dict, 'ASSIGN_HUB')
             contact = get_column_value(row_dict, 'CONTACT NUMBER')
             lat_val = get_column_value(row_dict, 'LATITUDE')
             lon_val = get_column_value(row_dict, 'LONGITUDE')
@@ -989,7 +975,7 @@ def create_pdf_export(df, selected_indices):
                 get_column_value(row_dict, 'SITE'),
                 get_column_value(row_dict, 'REGION'),
                 fo_onsite if fo_onsite else 'No FO assigned',
-                globe_hub if globe_hub else 'Not assigned',
+                assign_hub if assign_hub else 'Not assigned',
                 contact if contact else 'No contact',
                 lat_val,
                 lon_val
@@ -1126,8 +1112,8 @@ def show_about():
         ("🗺️ Map View", "Interactive site visualization"),
         ("📄 PDF Export", "Multiple sites export"),
         ("📱 Mobile Ready", "Fully responsive design"),
-        ("👤 FO Onsite Display", "Shows assigned Field Operations engineer"),
-        ("🌐 Globe Hub Display", "Shows assigned Globe Hub"),
+        ("👤 FO Onsite Display", "Shows assigned Field Operations engineer from Column S"),
+        ("📋 Assign Hub", "Shows current assigned hub"),
     ]
     
     for icon, name in features:
@@ -1162,6 +1148,24 @@ def show_main():
         st.warning("⚠️ No data available. Please check the database file.")
         bottom_nav()
         return
+    
+    # Show debug info - Column S checker
+    with st.expander("🔧 Column Debug - Check Column S (NEW ENGINEER_ANM1)", expanded=False):
+        if 'NEW ENGINEER_ANM1' in df.columns:
+            st.success("✅ Column 'NEW ENGINEER_ANM1' found in your Excel file!")
+            # Show sample values
+            sample_values = df['NEW ENGINEER_ANM1'].dropna().head(10).tolist()
+            st.markdown(f"**Sample values from Column S:**")
+            for val in sample_values:
+                st.markdown(f"- `{val}`")
+            
+            if len(sample_values) == 0:
+                st.warning("⚠️ Column S has no values - all are empty/NaN")
+        else:
+            st.error("❌ Column 'NEW ENGINEER_ANM1' NOT found in your Excel file!")
+            st.markdown("**Available columns in your file:**")
+            for col in df.columns:
+                st.markdown(f"- `{col}`")
     
     # Search Section
     st.markdown('<div class="search-section">', unsafe_allow_html=True)
@@ -1217,16 +1221,13 @@ def show_main():
         terms_display = ', '.join([f'"{t}"' for t in terms])
         st.markdown(f"**Found {len(search_results_df)} site(s)** matching: {terms_display}")
         
-        # Count FO Onsite and Hub availability
+        # Count FO Onsite availability
         fo_count = 0
-        hub_count = 0
         contact_count = 0
         for _, row in search_results_df.iterrows():
             row_dict = row.to_dict()
             if get_column_value(row_dict, 'NEW ENGINEER_ANM1'):
                 fo_count += 1
-            if get_column_value(row_dict, 'NEW ASSIGN HUB'):
-                hub_count += 1
             if get_column_value(row_dict, 'CONTACT NUMBER'):
                 contact_count += 1
         
@@ -1236,7 +1237,6 @@ def show_main():
             'coords': search_results_df['LATITUDE'].notna().sum() if 'LATITUDE' in search_results_df.columns else 0,
             'contacts': contact_count,
             'fo_onsite': fo_count,
-            'globe_hub': hub_count,
         }
         
         st.markdown(f"""
@@ -1244,7 +1244,7 @@ def show_main():
             <div class="stat-card"><span class="stat-number">{stats['total']}</span><span class="stat-label">Results</span></div>
             <div class="stat-card"><span class="stat-number">{stats['regions']}</span><span class="stat-label">Regions</span></div>
             <div class="stat-card"><span class="stat-number">{stats['fo_onsite']}</span><span class="stat-label">👤 With FO Onsite</span></div>
-            <div class="stat-card"><span class="stat-number">{stats['globe_hub']}</span><span class="stat-label">🌐 With Globe Hub</span></div>
+            <div class="stat-card"><span class="stat-number">{stats['contacts']}</span><span class="stat-label">📞 With Contact</span></div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1302,14 +1302,11 @@ def show_main():
     else:
         # Welcome Screen
         fo_count = 0
-        hub_count = 0
         contact_count = 0
         for _, row in df.iterrows():
             row_dict = row.to_dict()
             if get_column_value(row_dict, 'NEW ENGINEER_ANM1'):
                 fo_count += 1
-            if get_column_value(row_dict, 'NEW ASSIGN HUB'):
-                hub_count += 1
             if get_column_value(row_dict, 'CONTACT NUMBER'):
                 contact_count += 1
         
@@ -1319,7 +1316,6 @@ def show_main():
             'coords': df['LATITUDE'].notna().sum() if 'LATITUDE' in df.columns else 0,
             'contacts': contact_count,
             'fo_onsite': fo_count,
-            'globe_hub': hub_count,
         }
         
         st.markdown("""
@@ -1341,7 +1337,7 @@ def show_main():
             <div class="stat-card"><span class="stat-number">{stats['total']}</span><span class="stat-label">Available Sites</span></div>
             <div class="stat-card"><span class="stat-number">{stats['regions']}</span><span class="stat-label">Regions</span></div>
             <div class="stat-card"><span class="stat-number">{stats['fo_onsite']}</span><span class="stat-label">👤 With FO Onsite</span></div>
-            <div class="stat-card"><span class="stat-number">{stats['globe_hub']}</span><span class="stat-label">🌐 With Globe Hub</span></div>
+            <div class="stat-card"><span class="stat-number">{stats['contacts']}</span><span class="stat-label">📞 With Contact</span></div>
         </div>
         """, unsafe_allow_html=True)
     
