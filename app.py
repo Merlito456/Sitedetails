@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import requests
 import time
 import urllib.parse
+import json
 
 # ------------------------------
 # PAGE CONFIG
@@ -133,64 +134,84 @@ def get_online_time():
         return None
 
 def generate_secure_token(site_plaid, user_email, user_name):
-    """Generate a secure token with embedded data - URL safe"""
+    """Generate a secure token with embedded data - SIMPLIFIED"""
     current_time = get_online_time()
     if current_time is None:
         current_time = datetime.utcnow()
     
     expiry = current_time + timedelta(days=TOKEN_EXPIRY_DAYS)
     
-    # Create payload with URL-safe characters
+    # Create a simple JSON payload
     payload = {
-        'c': current_time.isoformat(),  # created
-        'e': expiry.isoformat(),        # expires
-        's': site_plaid,                # site
-        'u': user_email,                # user email
-        'n': user_name                  # user name
+        'c': current_time.isoformat(),
+        'e': expiry.isoformat(),
+        's': site_plaid,
+        'u': user_email,
+        'n': user_name
     }
     
-    # Convert to JSON-like string with separators
-    payload_str = f"{payload['c']}|{payload['e']}|{payload['s']}|{payload['u']}|{payload['n']}"
+    # Convert to JSON string
+    payload_json = json.dumps(payload, separators=(',', ':'))
     
-    # Create signature
-    signature = hashlib.sha256(f"{payload_str}|{SECRET_KEY}".encode()).hexdigest()
+    # Create HMAC signature
+    signature = hashlib.sha256(f"{payload_json}|{SECRET_KEY}".encode()).hexdigest()
     
-    # Combine and encode URL-safe
-    token_data = f"{payload_str}|{signature}"
-    token = base64.urlsafe_b64encode(token_data.encode()).decode().rstrip('=')
+    # Combine payload and signature
+    token_data = f"{payload_json}|{signature}"
+    
+    # Encode to hex (URL-safe without any special characters)
+    token = token_data.encode().hex()
     
     return token
 
 def validate_token(token, df):
-    """Validate a token and return site data if valid"""
+    """Validate a token and return site data if valid - SIMPLIFIED"""
     try:
-        # Add padding back if missing
-        padding = 4 - (len(token) % 4)
-        if padding != 4:
-            token += '=' * padding
+        # Clean the token
+        token = token.strip()
         
-        # Decode token
-        decoded = base64.urlsafe_b64decode(token.encode()).decode()
-        parts = decoded.split('|')
+        # Remove any URL encoding artifacts
+        if '%' in token:
+            token = urllib.parse.unquote(token)
         
-        if len(parts) != 7:
-            return None, "Invalid token format - expected 7 parts"
+        # Decode from hex
+        try:
+            token_data = bytes.fromhex(token).decode('utf-8')
+        except ValueError:
+            return None, "Invalid token format - not valid hex"
         
-        # Extract parts - using short keys
-        created_str, expires_str, site_plaid, user_email, user_name, signature = parts[:6]
+        # Split payload and signature
+        parts = token_data.rsplit('|', 1)
+        if len(parts) != 2:
+            return None, "Invalid token format - expected 2 parts"
+        
+        payload_json, signature = parts
         
         # Verify signature
-        payload_str = f"{created_str}|{expires_str}|{site_plaid}|{user_email}|{user_name}"
-        expected_signature = hashlib.sha256(f"{payload_str}|{SECRET_KEY}".encode()).hexdigest()
-        
+        expected_signature = hashlib.sha256(f"{payload_json}|{SECRET_KEY}".encode()).hexdigest()
         if signature != expected_signature:
             return None, "Invalid token signature - token may be tampered"
+        
+        # Parse payload
+        try:
+            payload = json.loads(payload_json)
+        except json.JSONDecodeError:
+            return None, "Invalid token payload"
+        
+        # Extract values
+        created_str = payload.get('c')
+        expires_str = payload.get('e')
+        site_plaid = payload.get('s')
+        user_email = payload.get('u')
+        user_name = payload.get('n')
+        
+        if not all([created_str, expires_str, site_plaid]):
+            return None, "Missing required token data"
         
         # Get online time for validation
         current_time = get_online_time()
         if current_time is None:
             current_time = datetime.utcnow()
-            st.warning("⚠️ Using system time for validation (online time unavailable)")
         
         # Parse dates
         try:
@@ -220,8 +241,6 @@ def validate_token(token, df):
         
         return site_data, None
         
-    except base64.binascii.Error as e:
-        return None, f"Invalid base64 encoding: {str(e)}"
     except Exception as e:
         return None, f"Token validation error: {str(e)}"
 
@@ -985,21 +1004,18 @@ def show_site_viewer(token):
         """, unsafe_allow_html=True)
         return
     
-    # Clean the token (remove any URL encoding artifacts)
+    # Clean the token
     token = token.strip()
     
-    site_data, error = validate_token(token, df)
-    
-    if error:
-        # Check if token might have been URL encoded
+    # If the token contains '%', it might be URL encoded
+    if '%' in token:
         try:
-            decoded_token = urllib.parse.unquote(token)
-            if decoded_token != token:
-                site_data, error = validate_token(decoded_token, df)
-                if not error:
-                    st.success("✅ Token successfully decoded and validated")
+            token = urllib.parse.unquote(token)
         except:
             pass
+    
+    # Validate
+    site_data, error = validate_token(token, df)
     
     if error:
         st.markdown(f"""
