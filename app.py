@@ -30,52 +30,20 @@ if 'search_results' not in st.session_state:
     st.session_state.search_results = None
 if 'page' not in st.session_state:
     st.session_state.page = 'main'
-if 'debug_info' not in st.session_state:
-    st.session_state.debug_info = None
 
 # ------------------------------
-# ACTUAL COLUMN MAPPINGS FROM YOUR EXCEL
+# COLUMN MAPPINGS - Based on your actual Excel
 # ------------------------------
-# Your actual headers from the image:
-# PLAID, SITE, WIRELINE_NAME (NMS NAMES), BCF_NAME, REGION, PROVINCE, 
-# MUNICIPALITY, BARANGAY, TERRITORY, LATITUDE, LONGITUDE, SITE_ADD, 
-# ASSIGN_HUB, TOWERCO, NEW ASSIGN_AREA, NEW ASSIGN_AREA NAME, 
-# NEW ASSIGN_HUB, NEW ENGINEER_AH, NEW ENGINEER_ANM1, 
-# NEW ENGINEER_ANM1 ID NUMBER, CONTACT NUMBER, NEW ANM HEAD, NEW ROH
-
-# Note: Some columns may have underscores (_) instead of spaces
-COLUMN_MAPPINGS = {
-    'PLAID': ['PLAID'],
-    'SITE': ['SITE'],
-    'REGION': ['REGION'],
-    'PROVINCE': ['PROVINCE'],
-    'MUNICIPALITY': ['MUNICIPALITY'],
-    'BARANGAY': ['BARANGAY'],
-    'TERRITORY': ['TERRITORY'],
-    'LATITUDE': ['LATITUDE'],
-    'LONGITUDE': ['LONGITUDE'],
-    'SITE_ADD': ['SITE_ADD', 'SITE ADD'],
-    'ASSIGN_HUB': ['ASSIGN_HUB', 'ASSIGN HUB'],
-    'TOWERCO': ['TOWERCO'],
-    'NEW_ASSIGN_HUB': ['NEW ASSIGN_HUB', 'NEW ASSIGN HUB', 'NEW_ASSIGN_HUB'],  # GLOBE HUB
-    'FO_ONSITE': ['NEW ENGINEER_ANM1', 'NEW ENGINEER_ANM1', 'NEW_ENGINEER_ANM1'],  # FO ONSITE
-    'CONTACT_NUMBER': ['CONTACT NUMBER', 'CONTACT_NUMBER', 'CONTACT NO'],  # FO NUMBER
-    'NEW_ENGINEER_AH': ['NEW ENGINEER_AH', 'NEW ENGINEER AH'],
-    'NEW_ANM_HEAD': ['NEW ANM HEAD', 'NEW_ANM_HEAD'],
-    'NEW_ROH': ['NEW ROH', 'NEW_ROH'],
-    'NEW_ASSIGN_AREA': ['NEW ASSIGN_AREA', 'NEW ASSIGN AREA'],
-    'NEW_ASSIGN_AREA_NAME': ['NEW ASSIGN_AREA NAME', 'NEW ASSIGN AREA NAME'],
-}
+# From your data:
+# Column S = NEW ENGINEER_ANM1 = FO USERNAME (e.g., RODERICK LASTIMOSA)
+# Column U = CONTACT NUMBER = FO NUMBER (e.g., 9176882909)
+# Column M = NEW ASSIGN_HUB = GLOBE HUB
 
 # Display names for the UI
 DISPLAY_NAMES = {
-    'NEW ASSIGN_HUB': '🌐 GLOBE HUB',
+    'NEW ASSIGN HUB': '🌐 GLOBE HUB',
     'NEW ENGINEER_ANM1': '👤 FO ONSITE',
     'CONTACT NUMBER': '📞 FO NUMBER',
-    'ASSIGN_HUB': '📋 ASSIGN HUB',
-    'NEW ENGINEER_AH': '👤 AH',
-    'NEW ANM HEAD': '👤 ANM HEAD',
-    'NEW ROH': '📋 ROH',
 }
 
 # ------------------------------
@@ -198,24 +166,6 @@ st.markdown("""
         border-color: var(--accent-blue);
         color: var(--text-primary);
     }
-
-    /* Debug info */
-    .debug-container {
-        background: var(--bg-secondary);
-        border-radius: 12px;
-        padding: 0.8rem;
-        border: 1px solid var(--border-color);
-        margin: 0.5rem 0;
-        font-family: monospace;
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-        max-height: 200px;
-        overflow: auto;
-    }
-
-    .debug-container .found { color: var(--accent-green); }
-    .debug-container .missing { color: var(--accent-red); }
-    .debug-container .info { color: var(--accent-blue); }
 
     /* ========================================
        SEARCH SECTION
@@ -477,6 +427,11 @@ st.markdown("""
         font-style: italic;
     }
 
+    .detail-value.fo-name {
+        color: var(--accent-blue);
+        font-weight: 600;
+    }
+
     .site-actions {
         display: flex;
         flex-wrap: wrap;
@@ -657,7 +612,9 @@ st.markdown("""
         }
 
         .site-name { font-size: 1.2rem; }
-        .site-details { grid-template-columns: repeat(3, 1fr); }
+        .site-details { 
+            grid-template-columns: repeat(4, 1fr); 
+        }
         .site-actions { gap: 0.8rem; }
 
         .action-btn {
@@ -689,8 +646,6 @@ st.markdown("""
             font-size: 0.95rem;
             min-width: 80px;
         }
-
-        .debug-container { max-height: 300px; }
     }
 
     /* ========================================
@@ -731,12 +686,11 @@ st.markdown("""
 # ------------------------------
 @st.cache_data
 def load_excel_data(file_path):
-    """Load data from Excel file using the correct column mappings"""
+    """Load data from Excel file"""
     try:
         if not os.path.exists(file_path):
             return None
         df = pd.read_excel(file_path, engine='openpyxl')
-        # Keep original column names
         return df
     except Exception as e:
         st.error(f"❌ Error loading file: {str(e)}")
@@ -747,39 +701,18 @@ def safe_str(val):
         return ""
     return str(val)
 
-def find_column(row_dict, possible_names):
+def get_column_value(row_dict, column_name, default=""):
     """
-    Find a column in the row dictionary by trying multiple possible names.
-    Returns the matched column name or None.
+    Safely get value from a row dictionary.
+    Tries exact match, then case-insensitive match.
     """
-    row_keys = list(row_dict.keys())
+    if column_name in row_dict:
+        return safe_str(row_dict[column_name])
     
-    for name in possible_names:
-        # Exact match
-        if name in row_dict:
-            return name
-        # Case-insensitive match
-        for key in row_keys:
-            if key.strip().upper() == name.strip().upper():
-                return key
-            # Contains match
-            if name.strip().upper() in key.strip().upper():
-                return key
-    return None
-
-def get_column_value(row_dict, possible_names, default=""):
-    """
-    Safely get value from a row dictionary using multiple possible column names.
-    """
-    if isinstance(possible_names, str):
-        possible_names = [possible_names]
-    
-    # Try to find the column
-    matched_col = find_column(row_dict, possible_names)
-    
-    if matched_col and matched_col in row_dict:
-        val = row_dict[matched_col]
-        return safe_str(val)
+    # Case-insensitive match
+    for key in row_dict.keys():
+        if key.strip().upper() == column_name.strip().upper():
+            return safe_str(row_dict[key])
     
     return default
 
@@ -803,21 +736,18 @@ def perform_intelligent_search(df, search_input):
         term_mask = pd.Series([False] * len(df))
         term_found = False
         
-        # Search in PLAID
         if 'PLAID' in df.columns:
             exact_mask_plaid = df['PLAID'].astype(str).str.strip().str.upper() == term.upper()
             term_mask |= exact_mask_plaid
             if exact_mask_plaid.any():
                 term_found = True
         
-        # Search in SITE
         if 'SITE' in df.columns:
             exact_mask_site = df['SITE'].astype(str).str.strip().str.upper() == term.upper()
             term_mask |= exact_mask_site
             if exact_mask_site.any():
                 term_found = True
         
-        # If no exact match, try contains
         if not term_found:
             if 'PLAID' in df.columns:
                 term_mask |= df['PLAID'].astype(str).str.contains(term, case=False, na=False)
@@ -828,46 +758,44 @@ def perform_intelligent_search(df, search_input):
     return df[final_mask].copy()
 
 def create_site_card_html(row_dict, search_term=""):
-    """Create HTML for a site card with the correct column mappings"""
+    """Create HTML for a site card"""
     
-    # Get values using multiple possible column names
-    plaid = get_column_value(row_dict, ['PLAID'])
-    site = get_column_value(row_dict, ['SITE'])
-    region = get_column_value(row_dict, ['REGION'])
-    province = get_column_value(row_dict, ['PROVINCE'])
-    municipality = get_column_value(row_dict, ['MUNICIPALITY'])
-    barangay = get_column_value(row_dict, ['BARANGAY'])
-    territory = get_column_value(row_dict, ['TERRITORY'])
-    lat = get_column_value(row_dict, ['LATITUDE'])
-    lon = get_column_value(row_dict, ['LONGITUDE'])
-    site_add = get_column_value(row_dict, ['SITE_ADD', 'SITE ADD'])
-    assigned_hub = get_column_value(row_dict, ['ASSIGN_HUB', 'ASSIGN HUB'])
-    towerco = get_column_value(row_dict, ['TOWERCO'])
+    # Basic site info
+    plaid = get_column_value(row_dict, 'PLAID')
+    site = get_column_value(row_dict, 'SITE')
+    region = get_column_value(row_dict, 'REGION')
+    province = get_column_value(row_dict, 'PROVINCE')
+    municipality = get_column_value(row_dict, 'MUNICIPALITY')
+    barangay = get_column_value(row_dict, 'BARANGAY')
+    territory = get_column_value(row_dict, 'TERRITORY')
+    lat = get_column_value(row_dict, 'LATITUDE')
+    lon = get_column_value(row_dict, 'LONGITUDE')
+    site_add = get_column_value(row_dict, 'SITE_ADD')
+    assign_hub = get_column_value(row_dict, 'ASSIGN_HUB')
+    towerco = get_column_value(row_dict, 'TOWERCO')
     
-    # CRITICAL: These are the correctly mapped columns - try multiple variations
-    new_assign_hub = get_column_value(row_dict, ['NEW ASSIGN_HUB', 'NEW ASSIGN HUB', 'NEW_ASSIGN_HUB'])
-    fo_onsite = get_column_value(row_dict, ['NEW ENGINEER_ANM1', 'NEW ENGINEER_ANM1', 'NEW_ENGINEER_ANM1'])
-    contact = get_column_value(row_dict, ['CONTACT NUMBER', 'CONTACT_NUMBER', 'CONTACT NO'])
+    # CRITICAL COLUMNS - These are the actual mappings from your Excel
+    # Column S = NEW ENGINEER_ANM1 = FO ONSITE (e.g., RODERICK LASTIMOSA)
+    # Column U = CONTACT NUMBER = FO NUMBER (e.g., 9176882909)
+    # Column M = NEW ASSIGN_HUB = GLOBE HUB
+    fo_onsite = get_column_value(row_dict, 'NEW ENGINEER_ANM1')
+    contact = get_column_value(row_dict, 'CONTACT NUMBER')
+    globe_hub = get_column_value(row_dict, 'NEW ASSIGN HUB')
     
-    # Additional fields
-    new_engineer_ah = get_column_value(row_dict, ['NEW ENGINEER_AH', 'NEW ENGINEER AH'])
-    new_anm_head = get_column_value(row_dict, ['NEW ANM HEAD', 'NEW_ANM_HEAD'])
-    new_roh = get_column_value(row_dict, ['NEW ROH', 'NEW_ROH'])
-    
-    # For display names
-    hub_display = new_assign_hub if new_assign_hub else "Not assigned"
+    # Display values
     fo_display = fo_onsite if fo_onsite else "No FO assigned"
     contact_display = contact if contact else "No contact"
+    hub_display = globe_hub if globe_hub else "Not assigned"
     
     # Highlight search terms
     site_display = highlight_text(site, search_term)
     plaid_display = highlight_text(plaid, search_term)
-    hub_display_highlighted = highlight_text(hub_display, search_term)
     fo_display_highlighted = highlight_text(fo_display, search_term)
+    hub_display_highlighted = highlight_text(hub_display, search_term)
     
     # Check if values are missing for styling
-    fo_missing_class = "missing" if not fo_onsite else ""
-    hub_missing_class = "missing" if not new_assign_hub else ""
+    fo_missing_class = "missing" if not fo_onsite else "fo-name"
+    hub_missing_class = "missing" if not globe_hub else ""
     
     # Map button
     map_button = ''
@@ -911,24 +839,20 @@ def create_site_card_html(row_dict, search_term=""):
                 <span class="detail-value">{site_add}</span>
             </div>
             <div class="detail-item">
-                <span class="detail-label">👤 FO ONSITE</span>
-                <span class="detail-value highlight {fo_missing_class}">{fo_display_highlighted}</span>
+                <span class="detail-label">📋 ASSIGN HUB</span>
+                <span class="detail-value">{assign_hub if assign_hub else "Not assigned"}</span>
             </div>
             <div class="detail-item">
                 <span class="detail-label">🌐 GLOBE HUB</span>
                 <span class="detail-value highlight {hub_missing_class}">{hub_display_highlighted}</span>
             </div>
             <div class="detail-item">
-                <span class="detail-label">📋 ASSIGN HUB</span>
-                <span class="detail-value">{assigned_hub if assigned_hub else "Not assigned"}</span>
+                <span class="detail-label">👤 FO ONSITE</span>
+                <span class="detail-value {fo_missing_class}">{fo_display_highlighted}</span>
             </div>
             <div class="detail-item">
                 <span class="detail-label">📞 FO NUMBER</span>
                 <span class="detail-value">{contact_display}</span>
-            </div>
-            <div class="detail-item">
-                <span class="detail-label">👤 AH</span>
-                <span class="detail-value">{new_engineer_ah if new_engineer_ah else "N/A"}</span>
             </div>
         </div>
         <div class="site-actions">
@@ -1041,17 +965,17 @@ def create_pdf_export(df, selected_indices):
         
         selected_df = df.iloc[selected_indices]
         
-        # Header
+        # Header - Remove AH columns
         header = ['PLAID', 'SITE', 'REGION', 'FO ONSITE', 'GLOBE HUB', 'CONTACT', 'LATITUDE', 'LONGITUDE']
         table_data = [header]
         
         for idx, row in selected_df.iterrows():
             row_dict = row.to_dict()
-            fo_onsite = get_column_value(row_dict, ['NEW ENGINEER_ANM1', 'NEW ENGINEER_ANM1', 'NEW_ENGINEER_ANM1'])
-            globe_hub = get_column_value(row_dict, ['NEW ASSIGN_HUB', 'NEW ASSIGN HUB', 'NEW_ASSIGN_HUB'])
-            contact = get_column_value(row_dict, ['CONTACT NUMBER', 'CONTACT_NUMBER', 'CONTACT NO'])
-            lat_val = get_column_value(row_dict, ['LATITUDE'])
-            lon_val = get_column_value(row_dict, ['LONGITUDE'])
+            fo_onsite = get_column_value(row_dict, 'NEW ENGINEER_ANM1')
+            globe_hub = get_column_value(row_dict, 'NEW ASSIGN HUB')
+            contact = get_column_value(row_dict, 'CONTACT NUMBER')
+            lat_val = get_column_value(row_dict, 'LATITUDE')
+            lon_val = get_column_value(row_dict, 'LONGITUDE')
             
             try:
                 if lat_val and lon_val:
@@ -1061,9 +985,9 @@ def create_pdf_export(df, selected_indices):
                 pass
             
             table_data.append([
-                get_column_value(row_dict, ['PLAID']),
-                get_column_value(row_dict, ['SITE']),
-                get_column_value(row_dict, ['REGION']),
+                get_column_value(row_dict, 'PLAID'),
+                get_column_value(row_dict, 'SITE'),
+                get_column_value(row_dict, 'REGION'),
                 fo_onsite if fo_onsite else 'No FO assigned',
                 globe_hub if globe_hub else 'Not assigned',
                 contact if contact else 'No contact',
@@ -1140,63 +1064,6 @@ def bottom_nav():
         </span>
     </div>
     """, unsafe_allow_html=True)
-
-# ------------------------------
-# COLUMN DEBUGGER
-# ------------------------------
-def show_column_debug(df):
-    """Show debug information about columns"""
-    st.markdown("---")
-    st.subheader("🔍 Column Debugger")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**Available Columns in Your Excel:**")
-        for col in df.columns:
-            st.markdown(f"- `{col}`")
-    
-    with col2:
-        st.markdown("**Column Mapping Status:**")
-        
-        # Check critical columns
-        critical_columns = {
-            'NEW ENGINEER_ANM1': ['NEW ENGINEER_ANM1', 'NEW ENGINEER_ANM1', 'NEW_ENGINEER_ANM1'],
-            'NEW ASSIGN_HUB': ['NEW ASSIGN_HUB', 'NEW ASSIGN HUB', 'NEW_ASSIGN_HUB'],
-            'CONTACT NUMBER': ['CONTACT NUMBER', 'CONTACT_NUMBER', 'CONTACT NO'],
-            'ASSIGN_HUB': ['ASSIGN_HUB', 'ASSIGN HUB'],
-        }
-        
-        for display_name, possible_names in critical_columns.items():
-            found = False
-            for name in possible_names:
-                if name in df.columns:
-                    found = True
-                    break
-                # Case-insensitive check
-                for col in df.columns:
-                    if col.strip().upper() == name.strip().upper():
-                        found = True
-                        break
-                    if name.strip().upper() in col.strip().upper():
-                        found = True
-                        break
-            
-            if found:
-                st.markdown(f"✅ **{display_name}** - Found")
-            else:
-                st.markdown(f"❌ **{display_name}** - Not Found")
-    
-    # Show sample data
-    st.markdown("**Sample Data (First Row):**")
-    if len(df) > 0:
-        sample_row = df.iloc[0].to_dict()
-        for key, value in sample_row.items():
-            if pd.isna(value):
-                val_display = "NULL"
-            else:
-                val_display = str(value)[:50] + "..." if len(str(value)) > 50 else str(value)
-            st.markdown(f"- `{key}`: {val_display}")
 
 # ------------------------------
 # ABOUT PAGE
@@ -1288,7 +1155,6 @@ def show_main():
                     break
         if df is not None:
             st.session_state.df = df
-            st.session_state.debug_info = df.columns.tolist()
     else:
         df = st.session_state.df
     
@@ -1296,10 +1162,6 @@ def show_main():
         st.warning("⚠️ No data available. Please check the database file.")
         bottom_nav()
         return
-    
-    # Show debug toggle
-    if st.checkbox("🔧 Show Column Debugger", value=False):
-        show_column_debug(df)
     
     # Search Section
     st.markdown('<div class="search-section">', unsafe_allow_html=True)
@@ -1361,11 +1223,11 @@ def show_main():
         contact_count = 0
         for _, row in search_results_df.iterrows():
             row_dict = row.to_dict()
-            if get_column_value(row_dict, ['NEW ENGINEER_ANM1', 'NEW ENGINEER_ANM1', 'NEW_ENGINEER_ANM1']):
+            if get_column_value(row_dict, 'NEW ENGINEER_ANM1'):
                 fo_count += 1
-            if get_column_value(row_dict, ['NEW ASSIGN_HUB', 'NEW ASSIGN HUB', 'NEW_ASSIGN_HUB']):
+            if get_column_value(row_dict, 'NEW ASSIGN HUB'):
                 hub_count += 1
-            if get_column_value(row_dict, ['CONTACT NUMBER', 'CONTACT_NUMBER', 'CONTACT NO']):
+            if get_column_value(row_dict, 'CONTACT NUMBER'):
                 contact_count += 1
         
         stats = {
@@ -1439,17 +1301,16 @@ def show_main():
     
     else:
         # Welcome Screen
-        # Count FO Onsite and Hub availability
         fo_count = 0
         hub_count = 0
         contact_count = 0
         for _, row in df.iterrows():
             row_dict = row.to_dict()
-            if get_column_value(row_dict, ['NEW ENGINEER_ANM1', 'NEW ENGINEER_ANM1', 'NEW_ENGINEER_ANM1']):
+            if get_column_value(row_dict, 'NEW ENGINEER_ANM1'):
                 fo_count += 1
-            if get_column_value(row_dict, ['NEW ASSIGN_HUB', 'NEW ASSIGN HUB', 'NEW_ASSIGN_HUB']):
+            if get_column_value(row_dict, 'NEW ASSIGN HUB'):
                 hub_count += 1
-            if get_column_value(row_dict, ['CONTACT NUMBER', 'CONTACT_NUMBER', 'CONTACT NO']):
+            if get_column_value(row_dict, 'CONTACT NUMBER'):
                 contact_count += 1
         
         stats = {
