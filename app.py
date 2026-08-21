@@ -326,7 +326,6 @@ st.markdown("""
         transform: scale(1.02);
     }
 
-    /* Date picker styling */
     .stDateInput label {
         color: #e8e8f0 !important;
     }
@@ -422,6 +421,13 @@ def get_site_by_name(df, site_name):
         return site.iloc[0].to_dict()
     return None
 
+def get_site_name_by_plaid(df, plaid):
+    """Get the Site Name (Column B) for a given PLAID"""
+    site_data = get_site_by_plaid(df, plaid)
+    if site_data:
+        return safe_str(site_data.get('SITE', ''))
+    return None
+
 def get_all_sites(df):
     if df is None or df.empty:
         return []
@@ -469,15 +475,14 @@ def get_online_time():
 # ============================================================
 # SECTION 4: TOKEN GENERATION AND VALIDATION
 # ============================================================
-def generate_secure_token(site_plaid, start_date, end_date, device_identifiers=""):
+def generate_secure_token(site_plaid, site_name, start_date, end_date, device_identifiers=""):
     """
-    Generate token with embedded MAC addresses, IMEI, Android IDs, and date range.
+    Generate token with embedded MAC addresses, IMEI, Android IDs, date range, and site name.
     """
     current_time = get_online_time()
     if current_time is None:
         current_time = datetime.utcnow()
     
-    # Use provided dates or fallback to defaults
     if start_date:
         expiry = datetime.combine(end_date, datetime.max.time()) if end_date else datetime.combine(start_date, datetime.max.time())
     else:
@@ -494,6 +499,7 @@ def generate_secure_token(site_plaid, start_date, end_date, device_identifiers="
         'c': current_time.isoformat(),
         'e': expiry.isoformat(),
         's': site_plaid,
+        'n': site_name,  # Site Name from Column B
         'sd': start_date.isoformat() if start_date else '',
         'ed': end_date.isoformat() if end_date else '',
         'd': devices,
@@ -553,6 +559,7 @@ def validate_token(token, df, device_fingerprint=None):
         created_str = payload.get('c')
         expires_str = payload.get('e')
         site_plaid = payload.get('s')
+        site_name = payload.get('n', '')
         start_date_str = payload.get('sd', '')
         end_date_str = payload.get('ed', '')
         allowed_devices = payload.get('d', [])
@@ -595,6 +602,7 @@ def validate_token(token, df, device_fingerprint=None):
         site_data['_raw_devices'] = raw_devices
         site_data['_start_date'] = start_date_str
         site_data['_end_date'] = end_date_str
+        site_data['_site_name'] = site_name
         
         return site_data, None
         
@@ -1013,7 +1021,10 @@ def show_admin_dashboard():
             selected_site_display = st.selectbox("Select Site", list(site_options.keys()), key="single_site_select")
             selected_site_plaid = site_options[selected_site_display]
             
-            st.markdown("""
+            # Get the site name for display
+            selected_site_name = get_site_name_by_plaid(df, selected_site_plaid) or selected_site_display
+            
+            st.markdown(f"""
             <div style="background: #14141e; 
                         padding: 0.8rem; 
                         margin: 0.5rem 0; 
@@ -1021,7 +1032,7 @@ def show_admin_dashboard():
                         border-radius: 12px;">
                 <p style="color: #34d399; font-weight: 600; margin: 0;">📱 <strong>MAC Address / IMEI / Android ID Verification</strong></p>
                 <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0.3rem 0 0 0;">
-                    Enter the user's actual device identifiers:<br>
+                    📍 Site: <strong style="color: #fbbf24;">{selected_site_name}</strong> ({selected_site_plaid})<br>
                     <span style="color: #34d399;">MAC Address</span>: <code style="color: #fbbf24;">AA:BB:CC:DD:EE:FF</code><br>
                     <span style="color: #fbbf24;">IMEI</span>: <code style="color: #fbbf24;">123456789012345</code> (15 digits)<br>
                     <span style="color: #60a5fa;">Android ID</span>: <code style="color: #fbbf24;">ANDROID:abc123def456</code>
@@ -1058,6 +1069,7 @@ def show_admin_dashboard():
                     
                     token = generate_secure_token(
                         selected_site_plaid, 
+                        selected_site_name,
                         start_date, 
                         end_date, 
                         clean_devices
@@ -1095,9 +1107,9 @@ def show_admin_dashboard():
                                     border: 1px solid #2a2a44; 
                                     margin: 0.5rem 0;">
                             <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">📋 Token Info</div>
+                            <div style="color: #d0d0e0;">📍 Site: {selected_site_name} ({selected_site_plaid})</div>
                             <div style="color: #d0d0e0;">📅 Start: {start_date.strftime('%B %d, %Y')}</div>
                             <div style="color: #d0d0e0;">📅 End: {end_date.strftime('%B %d, %Y')}</div>
-                            <div style="color: #d0d0e0;">📍 Site: {selected_site_display}</div>
                             <div style="color: #34d399;">📱 Devices: {device_count}</div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1185,11 +1197,12 @@ def show_admin_dashboard():
                     combined_tokens = []
                     
                     for idx, item in enumerate(items):
+                        # First try by PLAID
                         site_data = get_site_by_plaid(df, item)
                         if site_data:
                             plaid = safe_str(site_data.get('PLAID', ''))
                             site_name = safe_str(site_data.get('SITE', ''))
-                            token = generate_secure_token(plaid, batch_start_date, batch_end_date, clean_devices)
+                            token = generate_secure_token(plaid, site_name, batch_start_date, batch_end_date, clean_devices)
                             base_url = st.get_option('server.baseUrlPath') or ""
                             link = f"{base_url}/?token={token}"
                             results.append({
@@ -1203,15 +1216,17 @@ def show_admin_dashboard():
                             generated_links.append({
                                 'number': idx + 1,
                                 'link': link,
-                                'site': site_name
+                                'site': site_name,
+                                'plaid': plaid
                             })
                             combined_tokens.append(f"t{idx + 1}: {link}")
                         else:
+                            # Try by Site Name
                             site_data = get_site_by_name(df, item)
                             if site_data:
                                 plaid = safe_str(site_data.get('PLAID', ''))
                                 site_name = safe_str(site_data.get('SITE', ''))
-                                token = generate_secure_token(plaid, batch_start_date, batch_end_date, clean_devices)
+                                token = generate_secure_token(plaid, site_name, batch_start_date, batch_end_date, clean_devices)
                                 base_url = st.get_option('server.baseUrlPath') or ""
                                 link = f"{base_url}/?token={token}"
                                 results.append({
@@ -1225,7 +1240,8 @@ def show_admin_dashboard():
                                 generated_links.append({
                                     'number': idx + 1,
                                     'link': link,
-                                    'site': site_name
+                                    'site': site_name,
+                                    'plaid': plaid
                                 })
                                 combined_tokens.append(f"t{idx + 1}: {link}")
                             else:
@@ -1286,7 +1302,7 @@ def show_admin_dashboard():
                         </div>
                         """, unsafe_allow_html=True)
                     
-                    # Full links
+                    # Full links with site names
                     st.markdown("""
                         <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #2a2a44;">
                             <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Full Links</div>
@@ -1296,7 +1312,7 @@ def show_admin_dashboard():
                     for link_info in generated_links:
                         st.markdown(f"""
                         <div class="token-display-box">
-                            <div class="token-label">t{link_info['number']} - {link_info['site']}</div>
+                            <div class="token-label">t{link_info['number']} - {link_info['site']} ({link_info['plaid']})</div>
                             <div class="token-value">{link_info['link']}</div>
                             <button class="token-copy-btn" onclick="navigator.clipboard.writeText('{link_info['link']}')">📋 Copy Link</button>
                         </div>
@@ -1444,6 +1460,7 @@ def show_site_viewer(token):
     # Get date info
     start_date_str = site_data.get('_start_date', '')
     end_date_str = site_data.get('_end_date', '')
+    site_name_from_token = site_data.get('_site_name', '')
     
     date_info = ""
     if start_date_str and end_date_str:
@@ -1453,6 +1470,9 @@ def show_site_viewer(token):
             date_info = f"📅 {start.strftime('%B %d, %Y')} - {end.strftime('%B %d, %Y')}"
         except:
             pass
+    
+    # Use site name from token if available, otherwise from data
+    display_site_name = site_name_from_token if site_name_from_token else site_data.get('SITE', 'Unknown Site')
     
     st.markdown(f"""
     <div style="background: #1a1a2e; 
@@ -1465,7 +1485,7 @@ def show_site_viewer(token):
                     align-items: center; 
                     flex-wrap: wrap;">
             <div>
-                <h2 style="color: #e8e8f0; margin: 0;">{site_data.get('SITE', 'Unknown Site')}</h2>
+                <h2 style="color: #e8e8f0; margin: 0;">{display_site_name}</h2>
                 <span style="background: rgba(139, 92, 246, 0.25); 
                            color: #a78bfa; 
                            padding: 0.15rem 0.6rem; 
