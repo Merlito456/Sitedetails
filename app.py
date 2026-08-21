@@ -283,6 +283,52 @@ st.markdown("""
         color: #e8e8f0;
     }
 
+    /* Combined tokens box */
+    .combined-tokens-box {
+        background: #0d0d1a;
+        border-radius: 12px;
+        padding: 1rem;
+        border: 2px solid #4f8cf7;
+        margin: 0.5rem 0;
+    }
+    .combined-tokens-box .title {
+        color: #4f8cf7;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    .combined-tokens-box .tokens {
+        color: #fbbf24;
+        font-family: monospace;
+        font-size: 0.7rem;
+        word-break: break-all;
+        padding: 0.5rem;
+        background: #14141e;
+        border-radius: 4px;
+        border: 1px solid #1a1a2e;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+    }
+    .combined-tokens-box .copy-all-btn {
+        background: #4f8cf7;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 0.4rem 1rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        margin-top: 0.5rem;
+        transition: all 0.2s;
+        font-weight: 600;
+    }
+    .combined-tokens-box .copy-all-btn:hover {
+        background: #3a7bd5;
+        transform: scale(1.02);
+    }
+
     @media (max-width: 640px) {
         .main .block-container {
             padding: 0.5rem 0.5rem 5rem 0.5rem !important;
@@ -293,6 +339,10 @@ st.markdown("""
         }
         .token-item .t-value {
             font-size: 0.6rem;
+        }
+        .combined-tokens-box .tokens {
+            font-size: 0.6rem;
+            max-height: 150px;
         }
     }
     </style>
@@ -1095,6 +1145,7 @@ def show_admin_dashboard():
                     
                     results = []
                     generated_links = []
+                    combined_tokens = []
                     
                     for idx, item in enumerate(items):
                         site_data = get_site_by_plaid(df, item)
@@ -1117,6 +1168,7 @@ def show_admin_dashboard():
                                 'link': link,
                                 'site': site_name
                             })
+                            combined_tokens.append(f"t{idx + 1}: {link}")
                         else:
                             site_data = get_site_by_name(df, item)
                             if site_data:
@@ -1138,6 +1190,7 @@ def show_admin_dashboard():
                                     'link': link,
                                     'site': site_name
                                 })
+                                combined_tokens.append(f"t{idx + 1}: {link}")
                             else:
                                 results.append({
                                     'input': item,
@@ -1162,12 +1215,26 @@ def show_admin_dashboard():
                     with col3:
                         st.markdown(f"**❌ Failed:** {error_count}")
                     
-                    # Display tokens in t1, t2, t3... format
+                    # Display combined tokens (t1, t2, t3...)
                     st.markdown("---")
-                    st.subheader("🔗 Generated Tokens")
+                    st.subheader("🔗 Combined Tokens")
+                    st.markdown("Copy all tokens at once (t1, t2, t3...)")
+                    
+                    combined_text = "\n".join(combined_tokens)
+                    
+                    st.markdown(f"""
+                    <div class="combined-tokens-box">
+                        <div class="title">📋 All Tokens (Combined)</div>
+                        <div class="tokens">{combined_text}</div>
+                        <button class="copy-all-btn" onclick="navigator.clipboard.writeText(`{combined_text.replace('`', '\\`')}`)">📋 Copy All Tokens</button>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Display individual tokens in t1, t2, t3... format
+                    st.markdown("---")
+                    st.subheader("🔗 Individual Tokens")
                     st.markdown("Paste Token or Batch (t1, t2...)")
                     
-                    # Display in the format shown in the image
                     st.markdown(f"""
                     <div class="token-list-container">
                         <div class="token-list-title">📋 Generated Tokens</div>
@@ -1279,11 +1346,12 @@ def show_admin_dashboard():
                                 use_container_width=True
                             )
                             
-                            text_export = "\n".join([f"{r['Site']}: {r['Link']}" for r in export_data])
+                            # Also provide a combined text export
+                            combined_export = "\n".join([f"t{idx+1}: {r['link']}" for idx, r in enumerate(results) if r['status'] == 'success'])
                             st.download_button(
-                                "⬇️ Download Links as Text",
-                                data=text_export.encode('utf-8'),
-                                file_name=f"generated_links_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                                "⬇️ Download Combined Tokens as Text",
+                                data=combined_export.encode('utf-8'),
+                                file_name=f"combined_tokens_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                                 mime="text/plain",
                                 use_container_width=True
                             )
