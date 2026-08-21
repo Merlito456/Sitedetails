@@ -44,6 +44,8 @@ if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
 if 'batch_links' not in st.session_state:
     st.session_state.batch_links = []
+if 'show_admin_login' not in st.session_state:
+    st.session_state.show_admin_login = False
 
 # ------------------------------
 # SECURITY CONFIG
@@ -195,7 +197,6 @@ def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=
 def validate_device(device_to_check, allowed_devices_hashed):
     """
     Validate a device string against the allowed hashed devices.
-    Supports MAC, IMEI, and Android IDs.
     """
     if not device_to_check or not allowed_devices_hashed:
         return False
@@ -204,7 +205,6 @@ def validate_device(device_to_check, allowed_devices_hashed):
     if hashed in allowed_devices_hashed:
         return True
     
-    # Check without prefix
     prefixes = ['MAC:', 'IMEI:', 'ANDROID:', 'ANDROIDID:']
     for prefix in prefixes:
         if device_to_check.startswith(prefix):
@@ -641,35 +641,36 @@ st.markdown("""
         font-size: 0.7rem;
     }
 
-    /* Admin Login Overlay */
-    .admin-login-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(10, 10, 15, 0.95);
+    /* Admin Login Page - Full Page */
+    .admin-login-page {
         display: flex;
         justify-content: center;
         align-items: center;
-        z-index: 9999;
-        backdrop-filter: blur(10px);
+        min-height: 80vh;
+        padding: 2rem;
     }
-    .admin-login-box {
+    .admin-login-card {
         background: #1a1a2e;
         border-radius: 16px;
-        padding: 2rem;
-        max-width: 400px;
-        width: 90%;
+        padding: 2.5rem;
+        max-width: 420px;
+        width: 100%;
         border: 1px solid #2a2a44;
         box-shadow: 0 8px 30px rgba(0,0,0,0.5);
     }
-    .admin-login-box h2 {
+    .admin-login-card h2 {
         color: #e8e8f0;
         text-align: center;
-        margin-bottom: 1.5rem;
+        margin-bottom: 0.5rem;
+        font-size: 1.5rem;
     }
-    .admin-login-box input {
+    .admin-login-card .subtitle {
+        color: #8a8aa0;
+        text-align: center;
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+    }
+    .admin-login-card input {
         width: 100%;
         padding: 0.8rem 1rem;
         background: #1e1e32;
@@ -679,12 +680,12 @@ st.markdown("""
         font-size: 1rem;
         margin-bottom: 1rem;
     }
-    .admin-login-box input:focus {
+    .admin-login-card input:focus {
         border-color: #4f8cf7;
         outline: none;
         box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.15);
     }
-    .admin-login-box .login-btn {
+    .admin-login-card .login-btn {
         width: 100%;
         padding: 0.8rem;
         background: #4f8cf7;
@@ -695,10 +696,10 @@ st.markdown("""
         font-weight: 600;
         cursor: pointer;
     }
-    .admin-login-box .login-btn:hover {
+    .admin-login-card .login-btn:hover {
         background: #3a7bd5;
     }
-    .admin-login-box .error {
+    .admin-login-card .error {
         color: #f87171;
         text-align: center;
         margin-top: 0.5rem;
@@ -717,91 +718,37 @@ st.markdown("""
         .app-header-content { flex-direction: column; align-items: stretch; }
         .secure-card { padding: 1rem; }
         .batch-link-item { flex-direction: column; align-items: stretch; }
+        .admin-login-card { padding: 1.5rem; }
     }
     @media (max-width: 380px) {
         .site-details-grid { grid-template-columns: 1fr; }
         .site-name { font-size: 0.95rem; }
+        .admin-login-card { padding: 1rem; }
     }
     </style>
 """, unsafe_allow_html=True)
 
 # ------------------------------
-# ADMIN AUTHENTICATION - USING STREAMLIT NATIVE FORM
+# ADMIN AUTHENTICATION
 # ------------------------------
 def show_admin_login():
-    """Show admin login using Streamlit native form (no JS conflicts)"""
-    # Custom CSS to make it look like an overlay
+    """Show admin login as a centered card (full page)"""
+    st.markdown('<div class="admin-login-page">', unsafe_allow_html=True)
+    st.markdown('<div class="admin-login-card">', unsafe_allow_html=True)
+    
     st.markdown("""
-    <style>
-    .admin-login-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(10, 10, 15, 0.95);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 9999;
-        backdrop-filter: blur(10px);
-    }
-    .admin-login-box {
-        background: #1a1a2e;
-        border-radius: 16px;
-        padding: 2rem;
-        max-width: 400px;
-        width: 90%;
-        border: 1px solid #2a2a44;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.5);
-    }
-    .admin-login-box h2 {
-        color: #e8e8f0;
-        text-align: center;
-        margin-bottom: 1.5rem;
-    }
-    .admin-login-box .error {
-        color: #f87171;
-        text-align: center;
-        margin-top: 0.5rem;
-        font-size: 0.85rem;
-    }
-    .stButton > button {
-        width: 100%;
-        padding: 0.8rem;
-        background: #4f8cf7;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-    }
-    .stButton > button:hover {
-        background: #3a7bd5;
-        color: white;
-    }
-    .stTextInput > div > div > input {
-        background: #1e1e32 !important;
-        border: 1px solid #2a2a44 !important;
-        color: #e8e8f0 !important;
-        border-radius: 8px !important;
-        padding: 0.8rem 1rem !important;
-        font-size: 1rem !important;
-    }
-    .stTextInput > div > div > input:focus {
-        border-color: #4f8cf7 !important;
-        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.15) !important;
-    }
-    </style>
-    <div class="admin-login-container">
-        <div class="admin-login-box">
-            <h2>🔒 Admin Access</h2>
+    <h2>🔒 Admin Access</h2>
+    <p class="subtitle">Enter the admin password to access the dashboard</p>
     """, unsafe_allow_html=True)
     
-    # Use Streamlit's native form (no JavaScript)
-    with st.form("admin_login_form", clear_on_submit=True):
-        password = st.text_input("", placeholder="Enter Admin Password", type="password", label_visibility="collapsed")
-        submitted = st.form_submit_button("Unlock")
+    with st.form("admin_login_form", clear_on_submit=False):
+        password = st.text_input(
+            "Password",
+            placeholder="Enter Admin Password",
+            type="password",
+            label_visibility="collapsed"
+        )
+        submitted = st.form_submit_button("🔓 Unlock", use_container_width=True)
         
         if submitted:
             if password == ADMIN_PASSWORD:
@@ -810,11 +757,8 @@ def show_admin_login():
             else:
                 st.markdown('<div class="error">❌ Invalid password. Please try again.</div>', unsafe_allow_html=True)
     
-    # Close the overlay divs
-    st.markdown("""
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def check_admin_auth():
     """Check if admin is authenticated"""
