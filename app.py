@@ -44,6 +44,8 @@ if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
 if 'batch_links' not in st.session_state:
     st.session_state.batch_links = []
+if 'generated_tokens' not in st.session_state:
+    st.session_state.generated_tokens = []
 
 # ------------------------------
 # SECURITY CONFIG
@@ -57,28 +59,20 @@ ADMIN_PASSWORD = "N0k1A"
 # ------------------------------
 st.markdown("""
     <style>
-    /* Main container */
     .main .block-container {
         padding: 0.5rem 0.8rem 5rem 0.8rem;
         background: #0a0a0f;
         max-width: 100% !important;
     }
-    .stApp {
-        background: #0a0a0f;
-    }
-    
-    /* Hide Streamlit branding */
+    .stApp { background: #0a0a0f; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Labels */
     .stTextInput label, .stSelectbox label, .stCheckbox label {
         color: #e8e8f0 !important;
         font-weight: 500 !important;
     }
-    
-    /* Input fields */
     .stTextInput input, .stSelectbox select, .stTextArea textarea {
         color: #e8e8f0 !important;
         background: #1a1a2e !important;
@@ -93,7 +87,6 @@ st.markdown("""
         color: #e8e8f0 !important;
     }
     
-    /* Buttons */
     .stButton button {
         color: #e8e8f0 !important;
         font-weight: 600 !important;
@@ -108,10 +101,7 @@ st.markdown("""
         color: #e8e8f0 !important;
     }
     
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem;
-    }
+    .stTabs [data-baseweb="tab-list"] { gap: 0.5rem; }
     .stTabs [data-baseweb="tab"] {
         background: #1a1a2e !important;
         border: 1px solid #2a2a44 !important;
@@ -125,7 +115,6 @@ st.markdown("""
         color: #e8e8f0 !important;
     }
     
-    /* Download buttons */
     .stDownloadButton button {
         color: #e8e8f0 !important;
         background: #1a1a2e !important;
@@ -137,14 +126,12 @@ st.markdown("""
         border-color: #4f8cf7 !important;
     }
     
-    /* Info/Warning/Success */
     .stAlert {
         background: #1a1a2e !important;
         border-color: #2a2a44 !important;
         color: #e8e8f0 !important;
     }
     
-    /* Dataframe */
     .stDataFrame {
         border: 1px solid #2a2a44 !important;
         border-radius: 12px !important;
@@ -154,7 +141,6 @@ st.markdown("""
         background: #1a1a2e !important;
     }
     
-    /* Expander */
     .streamlit-expanderHeader {
         background: #1a1a2e !important;
         border-color: #2a2a44 !important;
@@ -165,36 +151,23 @@ st.markdown("""
         border-color: #2a2a44 !important;
     }
     
-    /* Code blocks */
     code {
         color: #fbbf24 !important;
         background: #0d0d1a !important;
     }
     
-    /* Fix for text color in tabs */
-    .stTabs [data-baseweb="tab"] p {
-        color: #a0a0b8 !important;
-    }
-    .stTabs [aria-selected="true"] p {
-        color: #e8e8f0 !important;
-    }
+    .stTabs [data-baseweb="tab"] p { color: #a0a0b8 !important; }
+    .stTabs [aria-selected="true"] p { color: #e8e8f0 !important; }
     
-    /* Selectbox dropdown */
-    .stSelectbox div[data-baseweb="select"] {
-        background: #1a1a2e !important;
-    }
+    .stSelectbox div[data-baseweb="select"] { background: #1a1a2e !important; }
     .stSelectbox div[data-baseweb="select"] > div {
         background: #1a1a2e !important;
         border-color: #2a2a44 !important;
         color: #e8e8f0 !important;
     }
     
-    /* Multi-select */
-    .stMultiSelect div[data-baseweb="select"] {
-        background: #1a1a2e !important;
-    }
+    .stMultiSelect div[data-baseweb="select"] { background: #1a1a2e !important; }
     
-    /* File uploader */
     .stFileUploader {
         background: #1a1a2e !important;
         border: 1px solid #2a2a44 !important;
@@ -202,24 +175,124 @@ st.markdown("""
         padding: 1rem !important;
     }
     
-    /* Metrics */
     .stMetric {
         background: #1a1a2e !important;
         border: 1px solid #2a2a44 !important;
         border-radius: 12px !important;
         padding: 0.5rem !important;
     }
-    .stMetric label {
-        color: #8a8aa0 !important;
+    .stMetric label { color: #8a8aa0 !important; }
+    .stMetric div { color: #e8e8f0 !important; }
+
+    /* Token display boxes */
+    .token-display-box {
+        background: #0d0d1a;
+        border-radius: 8px;
+        padding: 0.8rem;
+        border: 1px solid #2a2a44;
+        font-family: 'Courier New', monospace;
+        margin: 0.5rem 0;
+        transition: all 0.3s;
     }
-    .stMetric div {
-        color: #e8e8f0 !important;
+    .token-display-box:hover {
+        border-color: #4f8cf7;
+        box-shadow: 0 0 20px rgba(79, 140, 247, 0.05);
     }
-    
-    /* Responsive */
+    .token-label {
+        color: #7a7a95;
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+    .token-value {
+        color: #fbbf24;
+        font-size: 0.75rem;
+        word-break: break-all;
+        font-family: 'Courier New', monospace;
+        margin-top: 0.3rem;
+        padding: 0.5rem;
+        background: #14141e;
+        border-radius: 4px;
+        border: 1px solid #1a1a2e;
+    }
+    .token-copy-btn {
+        background: #2a2a44;
+        color: #a0a0b8;
+        border: none;
+        border-radius: 4px;
+        padding: 0.2rem 0.8rem;
+        font-size: 0.7rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-top: 0.3rem;
+    }
+    .token-copy-btn:hover {
+        background: #3a3a5e;
+        color: #e8e8f0;
+    }
+
+    /* Token list container */
+    .token-list-container {
+        background: #1a1a2e;
+        border-radius: 12px;
+        padding: 1rem;
+        border: 1px solid #2a2a44;
+        margin: 0.5rem 0;
+    }
+    .token-list-title {
+        color: #4f8cf7;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    .token-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.4rem 0.5rem;
+        border-bottom: 1px solid #1a1a2e;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .token-item:last-child { border-bottom: none; }
+    .token-item .t-number {
+        color: #4f8cf7;
+        font-weight: 600;
+        font-size: 0.8rem;
+        min-width: 30px;
+    }
+    .token-item .t-value {
+        color: #fbbf24;
+        font-family: monospace;
+        font-size: 0.7rem;
+        word-break: break-all;
+        flex: 1;
+    }
+    .token-item .t-copy {
+        background: #2a2a44;
+        color: #a0a0b8;
+        border: none;
+        border-radius: 4px;
+        padding: 0.15rem 0.6rem;
+        font-size: 0.6rem;
+        cursor: pointer;
+    }
+    .token-item .t-copy:hover {
+        background: #3a3a5e;
+        color: #e8e8f0;
+    }
+
     @media (max-width: 640px) {
         .main .block-container {
             padding: 0.5rem 0.5rem 5rem 0.5rem !important;
+        }
+        .token-item {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .token-item .t-value {
+            font-size: 0.6rem;
         }
     }
     </style>
@@ -585,19 +658,6 @@ def app_header():
     </div>
     """, unsafe_allow_html=True)
 
-def secure_card(title, content):
-    st.markdown(f"""
-    <div style="background: #1a1a2e; 
-                border-radius: 16px; 
-                padding: 1.5rem; 
-                margin: 1rem 0; 
-                border: 1px solid #2a2a44; 
-                box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-        <h2 style="color: #e8e8f0; margin-bottom: 0.5rem; font-weight: 700;">{title}</h2>
-        <p style="color: #c0c0d0; font-size: 0.95rem; line-height: 1.6;">{content}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
 def site_card(site_data, search_term=""):
     site_name = safe_str(site_data.get('SITE', ''))
     plaid = safe_str(site_data.get('PLAID', ''))
@@ -619,7 +679,6 @@ def site_card(site_data, search_term=""):
     
     fo_display = fo_onsite if fo_onsite else "No FO assigned"
     
-    # Highlight search terms
     if search_term:
         site_name = site_name.replace(search_term, f'<span style="background: #fbbf24; color: #0a0a0f; padding: 0.05rem 0.2rem; border-radius: 3px; font-weight: 600;">{search_term}</span>')
         plaid = plaid.replace(search_term, f'<span style="background: #fbbf24; color: #0a0a0f; padding: 0.05rem 0.2rem; border-radius: 3px; font-weight: 600;">{search_term}</span>')
@@ -693,7 +752,6 @@ def site_card(site_data, search_term=""):
         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.7rem;">
     """, unsafe_allow_html=True)
     
-    # Map button
     if lat and lon:
         try:
             float(lat); float(lon)
@@ -704,7 +762,6 @@ def site_card(site_data, search_term=""):
     else:
         st.markdown('<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">⚠️ No coordinates</span>', unsafe_allow_html=True)
     
-    # Call button
     if contact:
         clean_contact = ''.join(ch for ch in contact if ch.isdigit() or ch == '+')
         if clean_contact:
@@ -946,9 +1003,6 @@ def show_admin_dashboard():
                                     border-radius: 8px; 
                                     padding: 0.8rem; 
                                     border: 1px solid #2a2a44; 
-                                    font-family: 'Courier New', monospace; 
-                                    word-break: break-all; 
-                                    font-size: 0.8rem; 
                                     margin: 0.5rem 0;">
                             <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">🔗 Secure Link</div>
                             <code style="color: #fbbf24; word-break: break-all; font-size: 0.7rem;">{link}</code>
@@ -960,9 +1014,6 @@ def show_admin_dashboard():
                                     border-radius: 8px; 
                                     padding: 0.8rem; 
                                     border: 1px solid #2a2a44; 
-                                    font-family: 'Courier New', monospace; 
-                                    word-break: break-all; 
-                                    font-size: 0.8rem; 
                                     margin: 0.5rem 0;">
                             <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">📋 Token Info</div>
                             <div style="color: #d0d0e0;">👤 User: {user_name}</div>
@@ -1111,35 +1162,43 @@ def show_admin_dashboard():
                     with col3:
                         st.markdown(f"**❌ Failed:** {error_count}")
                     
-                    # Display each link in a box
+                    # Display tokens in t1, t2, t3... format
                     st.markdown("---")
-                    st.subheader("🔗 Generated Links")
-                    st.markdown("Click the copy button to copy each link individually.")
+                    st.subheader("🔗 Generated Tokens")
+                    st.markdown("Paste Token or Batch (t1, t2...)")
+                    
+                    # Display in the format shown in the image
+                    st.markdown(f"""
+                    <div class="token-list-container">
+                        <div class="token-list-title">📋 Generated Tokens</div>
+                    """, unsafe_allow_html=True)
                     
                     for link_info in generated_links:
                         st.markdown(f"""
-                        <div style="background: #1a1a2e; 
-                                    border-radius: 8px; 
-                                    padding: 0.5rem 0.8rem; 
-                                    margin: 0.2rem 0; 
-                                    border: 1px solid #2a2a44; 
-                                    display: flex; 
-                                    justify-content: space-between; 
-                                    align-items: center; 
-                                    flex-wrap: wrap; 
-                                    gap: 0.5rem;">
-                            <span style="color: #4f8cf7; font-weight: 600; font-size: 0.8rem;">#{link_info['number']}</span>
-                            <span style="color: #fbbf24; font-family: monospace; font-size: 0.7rem; word-break: break-all; flex: 1;">{link_info['link']}</span>
-                            <button onclick="navigator.clipboard.writeText('{link_info['link']}')" 
-                                    style="background: #2a2a44; 
-                                           color: #a0a0b8; 
-                                           border: none; 
-                                           border-radius: 4px; 
-                                           padding: 0.2rem 0.6rem; 
-                                           font-size: 0.65rem; 
-                                           cursor: pointer;">📋 Copy</button>
+                        <div class="token-item">
+                            <span class="t-number">t{link_info['number']}</span>
+                            <span class="t-value">{link_info['link']}</span>
+                            <button class="t-copy" onclick="navigator.clipboard.writeText('{link_info['link']}')">📋 Copy</button>
                         </div>
                         """, unsafe_allow_html=True)
+                    
+                    # Also show full links
+                    st.markdown("""
+                        <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #2a2a44;">
+                            <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Full Links</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    for link_info in generated_links:
+                        st.markdown(f"""
+                        <div class="token-display-box">
+                            <div class="token-label">t{link_info['number']} - {link_info['site']}</div>
+                            <div class="token-value">{link_info['link']}</div>
+                            <button class="token-copy-btn" onclick="navigator.clipboard.writeText('{link_info['link']}')">📋 Copy Link</button>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
                     
                     # Also show detailed results
                     st.markdown("---")
@@ -1326,7 +1385,6 @@ def show_site_viewer(token):
         """, unsafe_allow_html=True)
         return
     
-    # Display site content
     online_time = get_online_time()
     time_source = "🔒 Time verified: Online (UTC)" if online_time else "⚠️ Time source: System (offline - contact admin)"
     
