@@ -40,12 +40,17 @@ if 'device_fingerprint' not in st.session_state:
     st.session_state.device_fingerprint = None
 if 'access_granted' not in st.session_state:
     st.session_state.access_granted = False
+if 'admin_authenticated' not in st.session_state:
+    st.session_state.admin_authenticated = False
+if 'batch_links' not in st.session_state:
+    st.session_state.batch_links = []
 
 # ------------------------------
 # SECURITY CONFIG
 # ------------------------------
 TOKEN_EXPIRY_DAYS = 30
 SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
+ADMIN_PASSWORD = "N0k1A"
 
 # ------------------------------
 # DEVICE FINGERPRINT FUNCTIONS
@@ -155,8 +160,8 @@ def get_online_time():
 
 def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=""):
     """
-    Generate token with embedded MAC addresses and IMEI numbers.
-    Format: "MAC:AA:BB:CC:DD:EE:FF, IMEI:123456789012345"
+    Generate token with embedded MAC addresses, IMEI, and Android IDs.
+    Format: "MAC:AA:BB:CC:DD:EE:FF, IMEI:123456789012345, ANDROID:abc123def456"
     """
     current_time = get_online_time()
     if current_time is None:
@@ -191,7 +196,7 @@ def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=
 def validate_device(device_to_check, allowed_devices_hashed):
     """
     Validate a device string against the allowed hashed devices.
-    Supports MAC:XX:XX:XX:XX:XX:XX and IMEI:123456789012345 formats.
+    Supports MAC:XX:XX:XX:XX:XX:XX, IMEI:123456789012345, and ANDROID:abc123def456
     """
     if not device_to_check or not allowed_devices_hashed:
         return False
@@ -200,16 +205,14 @@ def validate_device(device_to_check, allowed_devices_hashed):
     if hashed in allowed_devices_hashed:
         return True
     
-    if device_to_check.startswith('MAC:'):
-        without_prefix = device_to_check[4:]
-        hashed = hashlib.sha256(without_prefix.encode()).hexdigest()
-        if hashed in allowed_devices_hashed:
-            return True
-    elif device_to_check.startswith('IMEI:'):
-        without_prefix = device_to_check[5:]
-        hashed = hashlib.sha256(without_prefix.encode()).hexdigest()
-        if hashed in allowed_devices_hashed:
-            return True
+    # Check without prefix
+    prefixes = ['MAC:', 'IMEI:', 'ANDROID:', 'ANDROIDID:']
+    for prefix in prefixes:
+        if device_to_check.startswith(prefix):
+            without_prefix = device_to_check[len(prefix):]
+            hashed = hashlib.sha256(without_prefix.encode()).hexdigest()
+            if hashed in allowed_devices_hashed:
+                return True
     
     return False
 
@@ -268,7 +271,7 @@ def validate_token(token, df, device_fingerprint=None):
         
         if allowed_devices and device_fingerprint:
             if not validate_device(device_fingerprint, allowed_devices):
-                return None, "Device not authorized. MAC Address or IMEI not recognized."
+                return None, "Device not authorized. MAC Address, IMEI, or Android ID not recognized."
         elif allowed_devices:
             return None, "Device verification required. Please ensure your device is registered."
         
@@ -577,6 +580,44 @@ st.markdown("""
         gap: 0.5rem;
     }
     .batch-result .site-item:last-child { border-bottom: none; }
+    
+    .batch-link-item {
+        background: #1a1a2e;
+        border-radius: 8px;
+        padding: 0.5rem 0.8rem;
+        margin: 0.2rem 0;
+        border: 1px solid #2a2a44;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .batch-link-item .link-number {
+        color: #4f8cf7;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+    .batch-link-item .link-code {
+        color: #fbbf24;
+        font-family: monospace;
+        font-size: 0.7rem;
+        word-break: break-all;
+        flex: 1;
+    }
+    .batch-link-item .copy-btn {
+        background: #2a2a44;
+        color: #a0a0b8;
+        border: none;
+        border-radius: 4px;
+        padding: 0.2rem 0.6rem;
+        font-size: 0.65rem;
+        cursor: pointer;
+    }
+    .batch-link-item .copy-btn:hover {
+        background: #3a3a5e;
+        color: #e8e8f0;
+    }
 
     .device-info {
         background: #14141e;
@@ -601,6 +642,70 @@ st.markdown("""
         font-size: 0.7rem;
     }
 
+    /* Admin Login Overlay */
+    .admin-login-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(10, 10, 15, 0.95);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        backdrop-filter: blur(10px);
+    }
+    .admin-login-box {
+        background: #1a1a2e;
+        border-radius: 16px;
+        padding: 2rem;
+        max-width: 400px;
+        width: 90%;
+        border: 1px solid #2a2a44;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    .admin-login-box h2 {
+        color: #e8e8f0;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+    .admin-login-box input {
+        width: 100%;
+        padding: 0.8rem 1rem;
+        background: #1e1e32;
+        border: 1px solid #2a2a44;
+        border-radius: 8px;
+        color: #e8e8f0;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+    }
+    .admin-login-box input:focus {
+        border-color: #4f8cf7;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.15);
+    }
+    .admin-login-box .login-btn {
+        width: 100%;
+        padding: 0.8rem;
+        background: #4f8cf7;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .admin-login-box .login-btn:hover {
+        background: #3a7bd5;
+    }
+    .admin-login-box .error {
+        color: #f87171;
+        text-align: center;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+    }
+
     @media (min-width: 769px) {
         .main .block-container { padding: 1rem 2rem 6rem 2rem; max-width: 1200px !important; margin: 0 auto; }
         .site-details-grid { grid-template-columns: repeat(3, 1fr); }
@@ -612,6 +717,7 @@ st.markdown("""
         .site-details-grid { grid-template-columns: 1fr 1fr; }
         .app-header-content { flex-direction: column; align-items: stretch; }
         .secure-card { padding: 1rem; }
+        .batch-link-item { flex-direction: column; align-items: stretch; }
     }
     @media (max-width: 380px) {
         .site-details-grid { grid-template-columns: 1fr; }
@@ -619,6 +725,48 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# ------------------------------
+# ADMIN AUTHENTICATION
+# ------------------------------
+def admin_login():
+    """Show admin login screen"""
+    st.markdown("""
+    <div class="admin-login-overlay">
+        <div class="admin-login-box">
+            <h2>🔒 Admin Access</h2>
+            <form id="admin-login-form" onsubmit="return false;">
+                <input type="password" id="admin-password" placeholder="Enter Admin Password" autofocus>
+                <button type="button" class="login-btn" onclick="submitPassword()">Unlock</button>
+            </form>
+            <div id="login-error" class="error"></div>
+        </div>
+    </div>
+    <script>
+    function submitPassword() {
+        const password = document.getElementById('admin-password').value;
+        if (password === 'N0k1A') {
+            // Send success to Streamlit
+            window.location.href = window.location.pathname + '?admin_auth=true';
+        } else {
+            document.getElementById('login-error').textContent = '❌ Invalid password. Please try again.';
+            document.getElementById('admin-password').value = '';
+            document.getElementById('admin-password').focus();
+        }
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            submitPassword();
+        }
+    });
+    </script>
+    """, unsafe_allow_html=True)
+    
+    # Check if authentication was successful via query param
+    if st.query_params.get('admin_auth') == 'true':
+        st.session_state.admin_authenticated = True
+        st.query_params.clear()
+        st.rerun()
 
 # ------------------------------
 # APP HEADER
@@ -656,6 +804,11 @@ def app_header():
 # ADMIN PAGE
 # ------------------------------
 def show_admin():
+    # Check admin authentication
+    if not st.session_state.admin_authenticated:
+        admin_login()
+        return
+    
     app_header()
     
     df = load_excel_data("database.xlsx")
@@ -682,10 +835,10 @@ def show_admin():
     st.markdown("""
     <div class="secure-card">
         <h2>⚙️ Admin Dashboard</h2>
-        <p>Generate secure links with <strong style="color: #34d399;">MAC Address / IMEI</strong> verification.</p>
+        <p>Generate secure links with <strong style="color: #34d399;">MAC Address / IMEI / Android ID</strong> verification.</p>
         <p class="sub-text">
             🔍 Search by PLAID or Site Name · Batch generate links<br>
-            📱 Device is verified by <strong style="color: #fbbf24;">MAC Address or IMEI</strong> - No user input required!
+            📱 Device is verified by <strong style="color: #fbbf24;">MAC Address, IMEI, or Android ID</strong> - No user input required!
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -695,7 +848,7 @@ def show_admin():
     <div class="device-info">
         <div class="label">📱 Your Device ID (For Testing)</div>
         <div class="value">{device_id}</div>
-        <div class="sub">For Android app, use actual MAC Address or IMEI</div>
+        <div class="sub">For Android app, use actual MAC Address, IMEI, or Android ID</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -775,21 +928,22 @@ def show_admin():
             st.markdown("""
             <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border-color: #34d399;">
                 <p style="color: #34d399; font-weight: 600; margin: 0;">
-                    📱 <strong>MAC Address / IMEI Verification</strong>
+                    📱 <strong>MAC Address / IMEI / Android ID Verification</strong>
                 </p>
                 <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0.3rem 0 0 0;">
                     Enter the user's actual device identifiers:<br>
                     <span style="color: #34d399;">MAC Address</span>: <code>AA:BB:CC:DD:EE:FF</code><br>
-                    <span style="color: #fbbf24;">IMEI</span>: <code>123456789012345</code> (15 digits)
+                    <span style="color: #fbbf24;">IMEI</span>: <code>123456789012345</code> (15 digits)<br>
+                    <span style="color: #60a5fa;">Android ID</span>: <code>ANDROID:abc123def456</code> (Android ID from device)
                 </p>
             </div>
             """, unsafe_allow_html=True)
             
             device_identifiers = st.text_area(
                 "Device Identifiers (one per line, or comma separated)",
-                placeholder="MAC:AA:BB:CC:DD:EE:FF\nIMEI:123456789012345\nMAC:11:22:33:44:55:66",
+                placeholder="MAC:AA:BB:CC:DD:EE:FF\nIMEI:123456789012345\nANDROID:abc123def456\nANDROIDID:d094968680211a30",
                 key="single_devices",
-                help="Format: MAC:AA:BB:CC:DD:EE:FF or IMEI:123456789012345"
+                help="Format: MAC:AA:BB:CC:DD:EE:FF or IMEI:123456789012345 or ANDROID:abc123def456"
             )
             
             if st.button("🔗 Generate Link", key="single_generate", use_container_width=True):
@@ -836,7 +990,7 @@ def show_admin():
                         </div>
                         """, unsafe_allow_html=True)
                         
-                    st.info("🔒 This link is bound to specific MAC Addresses and/or IMEI numbers. Only registered devices can access.")
+                    st.info("🔒 This link is bound to specific MAC Addresses, IMEI numbers, or Android IDs. Only registered devices can access.")
                 else:
                     st.warning("⚠️ Please fill in all required fields")
         else:
@@ -868,9 +1022,20 @@ def show_admin():
         with col2:
             batch_name = st.text_input("User Name", placeholder="John Doe", key="batch_name")
         
+        st.markdown("""
+        <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border-color: #34d399;">
+            <p style="color: #34d399; font-size: 0.8rem; margin: 0;">
+                📱 Device identifiers that will apply to ALL generated links:<br>
+                <span style="color: #34d399;">MAC Address</span>: <code>AA:BB:CC:DD:EE:FF</code><br>
+                <span style="color: #fbbf24;">IMEI</span>: <code>123456789012345</code><br>
+                <span style="color: #60a5fa;">Android ID</span>: <code>ANDROID:abc123def456</code>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         batch_devices = st.text_area(
             "Device Identifiers (one per line, or comma separated - applies to all)",
-            placeholder="MAC:AA:BB:CC:DD:EE:FF\nIMEI:123456789012345",
+            placeholder="MAC:AA:BB:CC:DD:EE:FF\nIMEI:123456789012345\nANDROID:d094968680211a30",
             key="batch_devices"
         )
         
@@ -890,7 +1055,9 @@ def show_admin():
                     st.success(f"📦 Processing {len(items)} items...")
                     
                     results = []
-                    for item in items:
+                    generated_links = []
+                    
+                    for idx, item in enumerate(items):
                         site_data = get_site_by_plaid(df, item)
                         if site_data:
                             plaid = safe_str(site_data.get('PLAID', ''))
@@ -903,7 +1070,13 @@ def show_admin():
                                 'plaid': plaid,
                                 'site': site_name,
                                 'status': 'success',
-                                'link': link
+                                'link': link,
+                                'index': idx + 1
+                            })
+                            generated_links.append({
+                                'number': idx + 1,
+                                'link': link,
+                                'site': site_name
                             })
                         else:
                             site_data = get_site_by_name(df, item)
@@ -918,7 +1091,13 @@ def show_admin():
                                     'plaid': plaid,
                                     'site': site_name,
                                     'status': 'success',
-                                    'link': link
+                                    'link': link,
+                                    'index': idx + 1
+                                })
+                                generated_links.append({
+                                    'number': idx + 1,
+                                    'link': link,
+                                    'site': site_name
                                 })
                             else:
                                 results.append({
@@ -926,7 +1105,8 @@ def show_admin():
                                     'plaid': '',
                                     'site': '',
                                     'status': 'error',
-                                    'link': ''
+                                    'link': '',
+                                    'index': idx + 1
                                 })
                     
                     st.markdown("---")
@@ -942,6 +1122,25 @@ def show_admin():
                         st.markdown(f"**✅ Success:** {success_count}")
                     with col3:
                         st.markdown(f"**❌ Failed:** {error_count}")
+                    
+                    # Display each link in a box
+                    st.markdown("---")
+                    st.subheader("🔗 Generated Links")
+                    st.markdown("Click the copy button to copy each link individually.")
+                    
+                    for link_info in generated_links:
+                        link_html = f"""
+                        <div class="batch-link-item">
+                            <span class="link-number">#{link_info['number']}</span>
+                            <span class="link-code">{link_info['link']}</span>
+                            <button class="copy-btn" onclick="navigator.clipboard.writeText('{link_info['link']}')">📋 Copy</button>
+                        </div>
+                        """
+                        st.markdown(link_html, unsafe_allow_html=True)
+                    
+                    # Also show detailed results
+                    st.markdown("---")
+                    st.subheader("📋 Detailed Results")
                     
                     for result in results:
                         if result['status'] == 'success':
@@ -973,6 +1172,7 @@ def show_admin():
                             </div>
                             """, unsafe_allow_html=True)
                     
+                    # Export all links
                     if success_count > 0:
                         st.markdown("---")
                         st.subheader("📥 Export All Links")
@@ -994,6 +1194,16 @@ def show_admin():
                                 data=csv,
                                 file_name=f"generated_links_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                                 mime="text/csv",
+                                use_container_width=True
+                            )
+                            
+                            # Also provide a text export
+                            text_export = "\n".join([f"{r['Site']}: {r['Link']}" for r in export_data])
+                            st.download_button(
+                                "⬇️ Download Links as Text",
+                                data=text_export.encode('utf-8'),
+                                file_name=f"generated_links_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                                mime="text/plain",
                                 use_container_width=True
                             )
 
@@ -1363,7 +1573,7 @@ def show_main():
         <p class="sub-text">
             ⏰ Time is verified online to prevent fraud<br>
             🔒 Each link is unique and expires after 30 days<br>
-            📱 <strong style="color: #34d399;">MAC Address / IMEI</strong> verification
+            📱 <strong style="color: #34d399;">MAC Address / IMEI / Android ID</strong> verification
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1384,7 +1594,7 @@ def show_main():
     st.markdown("""
     <div style="text-align: center; color: #8a8aa0; font-size: 0.8rem; margin-top: 1rem;">
         🔒 All access is encrypted and time-verified<br>
-        Links expire after 30 days • MAC/IMEI verification
+        Links expire after 30 days • MAC/IMEI/Android ID verification
     </div>
     """, unsafe_allow_html=True)
     
