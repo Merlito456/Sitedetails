@@ -730,7 +730,7 @@ st.markdown("""
 # ADMIN AUTHENTICATION
 # ------------------------------
 def admin_login():
-    """Show admin login screen"""
+    """Show admin login screen and redirect to admin page on success"""
     st.markdown("""
     <div class="admin-login-overlay">
         <div class="admin-login-box">
@@ -746,8 +746,8 @@ def admin_login():
     function submitPassword() {
         const password = document.getElementById('admin-password').value;
         if (password === 'N0k1A') {
-            // Send success to Streamlit
-            window.location.href = window.location.pathname + '?admin_auth=true';
+            // Send success to Streamlit and redirect to admin page
+            window.location.href = window.location.pathname + '?page=admin&admin_auth=true';
         } else {
             document.getElementById('login-error').textContent = '❌ Invalid password. Please try again.';
             document.getElementById('admin-password').value = '';
@@ -765,6 +765,7 @@ def admin_login():
     # Check if authentication was successful via query param
     if st.query_params.get('admin_auth') == 'true':
         st.session_state.admin_authenticated = True
+        # Clear the query params to avoid confusion
         st.query_params.clear()
         st.rerun()
 
