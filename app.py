@@ -44,8 +44,6 @@ if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
 if 'batch_links' not in st.session_state:
     st.session_state.batch_links = []
-if 'show_admin_login' not in st.session_state:
-    st.session_state.show_admin_login = False
 
 # ------------------------------
 # SECURITY CONFIG
@@ -163,7 +161,6 @@ def get_online_time():
 def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=""):
     """
     Generate token with embedded MAC addresses, IMEI, and Android IDs.
-    Format: "MAC:AA:BB:CC:DD:EE:FF, IMEI:123456789012345, ANDROID:abc123def456"
     """
     current_time = get_online_time()
     if current_time is None:
@@ -198,7 +195,7 @@ def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=
 def validate_device(device_to_check, allowed_devices_hashed):
     """
     Validate a device string against the allowed hashed devices.
-    Supports MAC:XX:XX:XX:XX:XX:XX, IMEI:123456789012345, and ANDROID:abc123def456
+    Supports MAC, IMEI, and Android IDs.
     """
     if not device_to_check or not allowed_devices_hashed:
         return False
@@ -729,68 +726,99 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------
-# ADMIN AUTHENTICATION
+# ADMIN AUTHENTICATION - USING STREAMLIT NATIVE FORM
 # ------------------------------
 def show_admin_login():
-    """Show admin login screen"""
+    """Show admin login using Streamlit native form (no JS conflicts)"""
+    # Custom CSS to make it look like an overlay
     st.markdown("""
-    <div class="admin-login-overlay">
+    <style>
+    .admin-login-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(10, 10, 15, 0.95);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        backdrop-filter: blur(10px);
+    }
+    .admin-login-box {
+        background: #1a1a2e;
+        border-radius: 16px;
+        padding: 2rem;
+        max-width: 400px;
+        width: 90%;
+        border: 1px solid #2a2a44;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    .admin-login-box h2 {
+        color: #e8e8f0;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+    .admin-login-box .error {
+        color: #f87171;
+        text-align: center;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+    }
+    .stButton > button {
+        width: 100%;
+        padding: 0.8rem;
+        background: #4f8cf7;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+    .stButton > button:hover {
+        background: #3a7bd5;
+        color: white;
+    }
+    .stTextInput > div > div > input {
+        background: #1e1e32 !important;
+        border: 1px solid #2a2a44 !important;
+        color: #e8e8f0 !important;
+        border-radius: 8px !important;
+        padding: 0.8rem 1rem !important;
+        font-size: 1rem !important;
+    }
+    .stTextInput > div > div > input:focus {
+        border-color: #4f8cf7 !important;
+        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.15) !important;
+    }
+    </style>
+    <div class="admin-login-container">
         <div class="admin-login-box">
             <h2>🔒 Admin Access</h2>
-            <div id="login-form">
-                <input type="password" id="admin-password" placeholder="Enter Admin Password" autofocus>
-                <button type="button" class="login-btn" onclick="submitPassword()">Unlock</button>
-                <div id="login-error" class="error"></div>
-            </div>
+    """, unsafe_allow_html=True)
+    
+    # Use Streamlit's native form (no JavaScript)
+    with st.form("admin_login_form", clear_on_submit=True):
+        password = st.text_input("", placeholder="Enter Admin Password", type="password", label_visibility="collapsed")
+        submitted = st.form_submit_button("Unlock")
+        
+        if submitted:
+            if password == ADMIN_PASSWORD:
+                st.session_state.admin_authenticated = True
+                st.rerun()
+            else:
+                st.markdown('<div class="error">❌ Invalid password. Please try again.</div>', unsafe_allow_html=True)
+    
+    # Close the overlay divs
+    st.markdown("""
         </div>
     </div>
-    <script>
-    function submitPassword() {
-        const password = document.getElementById('admin-password').value;
-        if (password === 'N0k1A') {
-            // Store in session storage and reload
-            sessionStorage.setItem('admin_auth', 'true');
-            window.location.reload();
-        } else {
-            document.getElementById('login-error').textContent = '❌ Invalid password. Please try again.';
-            document.getElementById('admin-password').value = '';
-            document.getElementById('admin-password').focus();
-        }
-    }
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            submitPassword();
-        }
-    });
-    </script>
     """, unsafe_allow_html=True)
 
 def check_admin_auth():
-    """Check if admin is authenticated via session storage"""
-    # Check session state first
-    if st.session_state.admin_authenticated:
-        return True
-    
-    # Check via component (session storage)
-    auth_check = """
-    <script>
-    // Check if admin_auth is set in session storage
-    const isAuth = sessionStorage.getItem('admin_auth') === 'true';
-    if (isAuth) {
-        // Send to Streamlit via query param
-        window.location.href = window.location.pathname + '?admin_auth=true';
-    }
-    </script>
-    """
-    components.html(auth_check, height=0)
-    
-    # Check if authentication was set via query param
-    if st.query_params.get('admin_auth') == 'true':
-        st.session_state.admin_authenticated = True
-        st.query_params.clear()
-        return True
-    
-    return False
+    """Check if admin is authenticated"""
+    return st.session_state.admin_authenticated
 
 # ------------------------------
 # APP HEADER
