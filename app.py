@@ -44,6 +44,8 @@ if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
 if 'batch_links' not in st.session_state:
     st.session_state.batch_links = []
+if 'show_admin_login' not in st.session_state:
+    st.session_state.show_admin_login = False
 
 # ------------------------------
 # SECURITY CONFIG
@@ -729,25 +731,26 @@ st.markdown("""
 # ------------------------------
 # ADMIN AUTHENTICATION
 # ------------------------------
-def admin_login():
-    """Show admin login screen and redirect to admin page on success"""
+def show_admin_login():
+    """Show admin login screen"""
     st.markdown("""
     <div class="admin-login-overlay">
         <div class="admin-login-box">
             <h2>🔒 Admin Access</h2>
-            <form id="admin-login-form" onsubmit="return false;">
+            <div id="login-form">
                 <input type="password" id="admin-password" placeholder="Enter Admin Password" autofocus>
                 <button type="button" class="login-btn" onclick="submitPassword()">Unlock</button>
-            </form>
-            <div id="login-error" class="error"></div>
+                <div id="login-error" class="error"></div>
+            </div>
         </div>
     </div>
     <script>
     function submitPassword() {
         const password = document.getElementById('admin-password').value;
         if (password === 'N0k1A') {
-            // Send success to Streamlit and redirect to admin page
-            window.location.href = window.location.pathname + '?page=admin&admin_auth=true';
+            // Store in session storage and reload
+            sessionStorage.setItem('admin_auth', 'true');
+            window.location.reload();
         } else {
             document.getElementById('login-error').textContent = '❌ Invalid password. Please try again.';
             document.getElementById('admin-password').value = '';
@@ -761,13 +764,33 @@ def admin_login():
     });
     </script>
     """, unsafe_allow_html=True)
+
+def check_admin_auth():
+    """Check if admin is authenticated via session storage"""
+    # Check session state first
+    if st.session_state.admin_authenticated:
+        return True
     
-    # Check if authentication was successful via query param
+    # Check via component (session storage)
+    auth_check = """
+    <script>
+    // Check if admin_auth is set in session storage
+    const isAuth = sessionStorage.getItem('admin_auth') === 'true';
+    if (isAuth) {
+        // Send to Streamlit via query param
+        window.location.href = window.location.pathname + '?admin_auth=true';
+    }
+    </script>
+    """
+    components.html(auth_check, height=0)
+    
+    # Check if authentication was set via query param
     if st.query_params.get('admin_auth') == 'true':
         st.session_state.admin_authenticated = True
-        # Clear the query params to avoid confusion
         st.query_params.clear()
-        st.rerun()
+        return True
+    
+    return False
 
 # ------------------------------
 # APP HEADER
@@ -806,8 +829,8 @@ def app_header():
 # ------------------------------
 def show_admin():
     # Check admin authentication
-    if not st.session_state.admin_authenticated:
-        admin_login()
+    if not check_admin_auth():
+        show_admin_login()
         return
     
     app_header()
