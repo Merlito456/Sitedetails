@@ -184,7 +184,6 @@ st.markdown("""
     .stMetric label { color: #8a8aa0 !important; }
     .stMetric div { color: #e8e8f0 !important; }
 
-    /* Token display boxes */
     .token-display-box {
         background: #0d0d1a;
         border-radius: 8px;
@@ -232,7 +231,6 @@ st.markdown("""
         color: #e8e8f0;
     }
 
-    /* Token list container */
     .token-list-container {
         background: #1a1a2e;
         border-radius: 12px;
@@ -283,7 +281,6 @@ st.markdown("""
         color: #e8e8f0;
     }
 
-    /* Combined tokens box */
     .combined-tokens-box {
         background: #0d0d1a;
         border-radius: 12px;
@@ -327,6 +324,21 @@ st.markdown("""
     .combined-tokens-box .copy-all-btn:hover {
         background: #3a7bd5;
         transform: scale(1.02);
+    }
+
+    /* Date picker styling */
+    .stDateInput label {
+        color: #e8e8f0 !important;
+    }
+    .stDateInput input {
+        color: #e8e8f0 !important;
+        background: #1a1a2e !important;
+        border: 1px solid #2a2a44 !important;
+        border-radius: 8px !important;
+    }
+    .stDateInput input:focus {
+        border-color: #4f8cf7 !important;
+        box-shadow: 0 0 0 2px rgba(79, 140, 247, 0.2) !important;
     }
 
     @media (max-width: 640px) {
@@ -457,12 +469,19 @@ def get_online_time():
 # ============================================================
 # SECTION 4: TOKEN GENERATION AND VALIDATION
 # ============================================================
-def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=""):
+def generate_secure_token(site_plaid, start_date, end_date, device_identifiers=""):
+    """
+    Generate token with embedded MAC addresses, IMEI, Android IDs, and date range.
+    """
     current_time = get_online_time()
     if current_time is None:
         current_time = datetime.utcnow()
     
-    expiry = current_time + timedelta(days=TOKEN_EXPIRY_DAYS)
+    # Use provided dates or fallback to defaults
+    if start_date:
+        expiry = datetime.combine(end_date, datetime.max.time()) if end_date else datetime.combine(start_date, datetime.max.time())
+    else:
+        expiry = current_time + timedelta(days=TOKEN_EXPIRY_DAYS)
     
     devices = []
     if device_identifiers:
@@ -475,8 +494,8 @@ def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=
         'c': current_time.isoformat(),
         'e': expiry.isoformat(),
         's': site_plaid,
-        'u': user_name,
-        'a': user_email,
+        'sd': start_date.isoformat() if start_date else '',
+        'ed': end_date.isoformat() if end_date else '',
         'd': devices,
         'raw': device_identifiers
     }
@@ -534,8 +553,8 @@ def validate_token(token, df, device_fingerprint=None):
         created_str = payload.get('c')
         expires_str = payload.get('e')
         site_plaid = payload.get('s')
-        user_name = payload.get('u')
-        user_email = payload.get('a')
+        start_date_str = payload.get('sd', '')
+        end_date_str = payload.get('ed', '')
         allowed_devices = payload.get('d', [])
         raw_devices = payload.get('raw', '')
         
@@ -568,13 +587,14 @@ def validate_token(token, df, device_fingerprint=None):
         if site_data is None:
             return None, f"Site not found: {site_plaid}"
         
-        site_data['_user_email'] = user_email
-        site_data['_user_name'] = user_name
+        site_data['_user_name'] = "Authorized User"
         site_data['_token_created'] = created_str
         site_data['_token_expires'] = expires_str
         site_data['_device_restricted'] = bool(allowed_devices)
         site_data['_device_count'] = len(allowed_devices)
         site_data['_raw_devices'] = raw_devices
+        site_data['_start_date'] = start_date_str
+        site_data['_end_date'] = end_date_str
         
         return site_data, None
         
@@ -993,12 +1013,6 @@ def show_admin_dashboard():
             selected_site_display = st.selectbox("Select Site", list(site_options.keys()), key="single_site_select")
             selected_site_plaid = site_options[selected_site_display]
             
-            col1, col2 = st.columns(2)
-            with col1:
-                user_email = st.text_input("User Email", placeholder="subcon@company.com", key="single_email")
-            with col2:
-                user_name = st.text_input("User Name", placeholder="John Doe", key="single_name")
-            
             st.markdown("""
             <div style="background: #14141e; 
                         padding: 0.8rem; 
@@ -1015,6 +1029,21 @@ def show_admin_dashboard():
             </div>
             """, unsafe_allow_html=True)
             
+            # Date range inputs
+            col1, col2 = st.columns(2)
+            with col1:
+                start_date = st.date_input(
+                    "Start Date",
+                    value=datetime.now().date(),
+                    key="single_start_date"
+                )
+            with col2:
+                end_date = st.date_input(
+                    "End Date",
+                    value=datetime.now().date() + timedelta(days=TOKEN_EXPIRY_DAYS),
+                    key="single_end_date"
+                )
+            
             device_identifiers = st.text_area(
                 "Device Identifiers (one per line, or comma separated)",
                 placeholder="MAC:AA:BB:CC:DD:EE:FF\nIMEI:123456789012345\nANDROID:abc123def456",
@@ -1023,14 +1052,14 @@ def show_admin_dashboard():
             )
             
             if st.button("🔗 Generate Link", key="single_generate", use_container_width=True):
-                if user_email and user_name and selected_site_plaid and device_identifiers:
+                if selected_site_plaid and device_identifiers:
                     clean_devices = device_identifiers.replace('\n', ',').replace(' ', '')
                     clean_devices = ','.join([d.strip() for d in clean_devices.split(',') if d.strip()])
                     
                     token = generate_secure_token(
                         selected_site_plaid, 
-                        user_email, 
-                        user_name, 
+                        start_date, 
+                        end_date, 
                         clean_devices
                     )
                     base_url = st.get_option('server.baseUrlPath') or ""
@@ -1066,9 +1095,8 @@ def show_admin_dashboard():
                                     border: 1px solid #2a2a44; 
                                     margin: 0.5rem 0;">
                             <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">📋 Token Info</div>
-                            <div style="color: #d0d0e0;">👤 User: {user_name}</div>
-                            <div style="color: #d0d0e0;">📧 Email: {user_email}</div>
-                            <div style="color: #d0d0e0;">⏰ Expires: {expiry.strftime('%B %d, %Y at %I:%M %p UTC')}</div>
+                            <div style="color: #d0d0e0;">📅 Start: {start_date.strftime('%B %d, %Y')}</div>
+                            <div style="color: #d0d0e0;">📅 End: {end_date.strftime('%B %d, %Y')}</div>
                             <div style="color: #d0d0e0;">📍 Site: {selected_site_display}</div>
                             <div style="color: #34d399;">📱 Devices: {device_count}</div>
                         </div>
@@ -1076,7 +1104,7 @@ def show_admin_dashboard():
                         
                     st.info("🔒 This link is bound to specific MAC Addresses, IMEI numbers, or Android IDs. Only registered devices can access.")
                 else:
-                    st.warning("⚠️ Please fill in all required fields")
+                    st.warning("⚠️ Please select a site and enter device identifiers")
         else:
             st.warning("No sites available.")
     
@@ -1101,11 +1129,20 @@ def show_admin_dashboard():
             height=100
         )
         
+        # Date range inputs for batch
         col1, col2 = st.columns(2)
         with col1:
-            batch_email = st.text_input("User Email", placeholder="subcon@company.com", key="batch_email")
+            batch_start_date = st.date_input(
+                "Start Date (for all links)",
+                value=datetime.now().date(),
+                key="batch_start_date"
+            )
         with col2:
-            batch_name = st.text_input("User Name", placeholder="John Doe", key="batch_name")
+            batch_end_date = st.date_input(
+                "End Date (for all links)",
+                value=datetime.now().date() + timedelta(days=TOKEN_EXPIRY_DAYS),
+                key="batch_end_date"
+            )
         
         st.markdown("""
         <div style="background: #14141e; 
@@ -1131,8 +1168,8 @@ def show_admin_dashboard():
         if st.button("🔗 Generate All Links", key="batch_generate", use_container_width=True):
             if not batch_input:
                 st.warning("⚠️ Please enter at least one PLAID or Site Name")
-            elif not batch_email or not batch_name or not batch_devices:
-                st.warning("⚠️ Please fill in all fields")
+            elif not batch_devices:
+                st.warning("⚠️ Please enter device identifiers")
             else:
                 items = [item.strip() for item in batch_input.split(',') if item.strip()]
                 clean_devices = batch_devices.replace('\n', ',').replace(' ', '')
@@ -1152,7 +1189,7 @@ def show_admin_dashboard():
                         if site_data:
                             plaid = safe_str(site_data.get('PLAID', ''))
                             site_name = safe_str(site_data.get('SITE', ''))
-                            token = generate_secure_token(plaid, batch_email, batch_name, clean_devices)
+                            token = generate_secure_token(plaid, batch_start_date, batch_end_date, clean_devices)
                             base_url = st.get_option('server.baseUrlPath') or ""
                             link = f"{base_url}/?token={token}"
                             results.append({
@@ -1174,7 +1211,7 @@ def show_admin_dashboard():
                             if site_data:
                                 plaid = safe_str(site_data.get('PLAID', ''))
                                 site_name = safe_str(site_data.get('SITE', ''))
-                                token = generate_secure_token(plaid, batch_email, batch_name, clean_devices)
+                                token = generate_secure_token(plaid, batch_start_date, batch_end_date, clean_devices)
                                 base_url = st.get_option('server.baseUrlPath') or ""
                                 link = f"{base_url}/?token={token}"
                                 results.append({
@@ -1215,7 +1252,7 @@ def show_admin_dashboard():
                     with col3:
                         st.markdown(f"**❌ Failed:** {error_count}")
                     
-                    # Display combined tokens (t1, t2, t3...)
+                    # Display combined tokens
                     st.markdown("---")
                     st.subheader("🔗 Combined Tokens")
                     st.markdown("Copy all tokens at once (t1, t2, t3...)")
@@ -1230,7 +1267,7 @@ def show_admin_dashboard():
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Display individual tokens in t1, t2, t3... format
+                    # Display individual tokens
                     st.markdown("---")
                     st.subheader("🔗 Individual Tokens")
                     st.markdown("Paste Token or Batch (t1, t2...)")
@@ -1249,7 +1286,7 @@ def show_admin_dashboard():
                         </div>
                         """, unsafe_allow_html=True)
                     
-                    # Also show full links
+                    # Full links
                     st.markdown("""
                         <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #2a2a44;">
                             <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Full Links</div>
@@ -1267,61 +1304,7 @@ def show_admin_dashboard():
                     
                     st.markdown("</div>", unsafe_allow_html=True)
                     
-                    # Also show detailed results
-                    st.markdown("---")
-                    st.subheader("📋 Detailed Results")
-                    
-                    for result in results:
-                        if result['status'] == 'success':
-                            st.markdown(f"""
-                            <div style="background: #14141e; 
-                                        border-radius: 12px; 
-                                        padding: 1rem; 
-                                        margin: 0.5rem 0; 
-                                        border: 1px solid #34d399;">
-                                <div style="padding: 0.3rem 0; 
-                                            border-bottom: 1px solid #1a1a2e; 
-                                            display: flex; 
-                                            justify-content: space-between; 
-                                            align-items: center; 
-                                            flex-wrap: wrap; 
-                                            gap: 0.5rem;">
-                                    <div>
-                                        <strong style="color: #e8e8f0;">{result['site']}</strong>
-                                        <span style="color: #8a8aa0; font-size: 0.8rem; margin-left: 0.5rem;">{result['plaid']}</span>
-                                    </div>
-                                    <div>
-                                        <span style="color: #34d399; font-size: 0.8rem;">✅ Generated</span>
-                                    </div>
-                                </div>
-                                <code style="color: #fbbf24; font-size: 0.7rem; word-break: break-all;">{result['link']}</code>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"""
-                            <div style="background: #14141e; 
-                                        border-radius: 12px; 
-                                        padding: 1rem; 
-                                        margin: 0.5rem 0; 
-                                        border: 1px solid #ef4444;">
-                                <div style="padding: 0.3rem 0; 
-                                            border-bottom: 1px solid #1a1a2e; 
-                                            display: flex; 
-                                            justify-content: space-between; 
-                                            align-items: center; 
-                                            flex-wrap: wrap; 
-                                            gap: 0.5rem;">
-                                    <div>
-                                        <strong style="color: #f87171;">{result['input']}</strong>
-                                    </div>
-                                    <div>
-                                        <span style="color: #f87171; font-size: 0.8rem;">❌ Not found</span>
-                                    </div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    
-                    # Export all links
+                    # Export
                     if success_count > 0:
                         st.markdown("---")
                         st.subheader("📥 Export All Links")
@@ -1346,7 +1329,6 @@ def show_admin_dashboard():
                                 use_container_width=True
                             )
                             
-                            # Also provide a combined text export
                             combined_export = "\n".join([f"t{idx+1}: {r['link']}" for idx, r in enumerate(results) if r['status'] == 'success'])
                             st.download_button(
                                 "⬇️ Download Combined Tokens as Text",
@@ -1459,6 +1441,19 @@ def show_site_viewer(token):
     device_status = "✅ Device Verified" if site_data.get('_device_restricted', False) else "ℹ️ No device restriction"
     device_count = site_data.get('_device_count', 0)
     
+    # Get date info
+    start_date_str = site_data.get('_start_date', '')
+    end_date_str = site_data.get('_end_date', '')
+    
+    date_info = ""
+    if start_date_str and end_date_str:
+        try:
+            start = datetime.fromisoformat(start_date_str)
+            end = datetime.fromisoformat(end_date_str)
+            date_info = f"📅 {start.strftime('%B %d, %Y')} - {end.strftime('%B %d, %Y')}"
+        except:
+            pass
+    
     st.markdown(f"""
     <div style="background: #1a1a2e; 
                 border-radius: 16px; 
@@ -1479,6 +1474,7 @@ def show_site_viewer(token):
                            font-weight: 600; 
                            border: 1px solid rgba(139, 92, 246, 0.2); 
                            display: inline-block;">{site_data.get('PLAID', 'No ID')}</span>
+                {f'<br><span style="color: #fbbf24; font-size: 0.7rem;">{date_info}</span>' if date_info else ''}
             </div>
             <div style="text-align: right;">
                 <span style="background: rgba(52, 211, 153, 0.2); 
@@ -1489,8 +1485,6 @@ def show_site_viewer(token):
                            border: 1px solid rgba(52, 211, 153, 0.2);">🔒 Secure Access</span>
                 <br>
                 <span style="color: #8a8aa0; font-size: 0.7rem;">{time_source}</span>
-                <br>
-                <span style="color: #8a8aa0; font-size: 0.7rem;">👤 {site_data.get('_user_name', 'Authorized User')}</span>
                 <br>
                 <span style="color: #34d399; font-size: 0.7rem;">{device_status} {f"({device_count} device(s))" if device_count > 0 else ""}</span>
                 <br>
