@@ -52,11 +52,183 @@ TOKEN_EXPIRY_DAYS = 30
 SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
 ADMIN_PASSWORD = "N0k1A"
 
+# ------------------------------
+# DARK THEME CSS
+# ------------------------------
+st.markdown("""
+    <style>
+    /* Main container */
+    .main .block-container {
+        padding: 0.5rem 0.8rem 5rem 0.8rem;
+        background: #0a0a0f;
+        max-width: 100% !important;
+    }
+    .stApp {
+        background: #0a0a0f;
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Labels */
+    .stTextInput label, .stSelectbox label, .stCheckbox label {
+        color: #e8e8f0 !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Input fields */
+    .stTextInput input, .stSelectbox select, .stTextArea textarea {
+        color: #e8e8f0 !important;
+        background: #1a1a2e !important;
+        border: 1px solid #2a2a44 !important;
+        border-radius: 8px !important;
+    }
+    .stTextInput input:focus, .stTextArea textarea:focus {
+        border-color: #4f8cf7 !important;
+        box-shadow: 0 0 0 2px rgba(79, 140, 247, 0.2) !important;
+    }
+    .stTextArea textarea {
+        color: #e8e8f0 !important;
+    }
+    
+    /* Buttons */
+    .stButton button {
+        color: #e8e8f0 !important;
+        font-weight: 600 !important;
+        background: #1a1a2e !important;
+        border: 1px solid #2a2a44 !important;
+        border-radius: 8px !important;
+        transition: all 0.2s !important;
+    }
+    .stButton button:hover {
+        background: #222244 !important;
+        border-color: #4f8cf7 !important;
+        color: #e8e8f0 !important;
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background: #1a1a2e !important;
+        border: 1px solid #2a2a44 !important;
+        border-radius: 8px !important;
+        padding: 0.5rem 1rem !important;
+        color: #a0a0b8 !important;
+    }
+    .stTabs [aria-selected="true"] {
+        background: #2a2a44 !important;
+        border-color: #4f8cf7 !important;
+        color: #e8e8f0 !important;
+    }
+    
+    /* Download buttons */
+    .stDownloadButton button {
+        color: #e8e8f0 !important;
+        background: #1a1a2e !important;
+        border: 1px solid #2a2a44 !important;
+        border-radius: 8px !important;
+    }
+    .stDownloadButton button:hover {
+        background: #222244 !important;
+        border-color: #4f8cf7 !important;
+    }
+    
+    /* Info/Warning/Success */
+    .stAlert {
+        background: #1a1a2e !important;
+        border-color: #2a2a44 !important;
+        color: #e8e8f0 !important;
+    }
+    
+    /* Dataframe */
+    .stDataFrame {
+        border: 1px solid #2a2a44 !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+    }
+    .stDataFrame > div {
+        background: #1a1a2e !important;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: #1a1a2e !important;
+        border-color: #2a2a44 !important;
+        color: #e8e8f0 !important;
+    }
+    .streamlit-expanderContent {
+        background: #1a1a2e !important;
+        border-color: #2a2a44 !important;
+    }
+    
+    /* Code blocks */
+    code {
+        color: #fbbf24 !important;
+        background: #0d0d1a !important;
+    }
+    
+    /* Fix for text color in tabs */
+    .stTabs [data-baseweb="tab"] p {
+        color: #a0a0b8 !important;
+    }
+    .stTabs [aria-selected="true"] p {
+        color: #e8e8f0 !important;
+    }
+    
+    /* Selectbox dropdown */
+    .stSelectbox div[data-baseweb="select"] {
+        background: #1a1a2e !important;
+    }
+    .stSelectbox div[data-baseweb="select"] > div {
+        background: #1a1a2e !important;
+        border-color: #2a2a44 !important;
+        color: #e8e8f0 !important;
+    }
+    
+    /* Multi-select */
+    .stMultiSelect div[data-baseweb="select"] {
+        background: #1a1a2e !important;
+    }
+    
+    /* File uploader */
+    .stFileUploader {
+        background: #1a1a2e !important;
+        border: 1px solid #2a2a44 !important;
+        border-radius: 8px !important;
+        padding: 1rem !important;
+    }
+    
+    /* Metrics */
+    .stMetric {
+        background: #1a1a2e !important;
+        border: 1px solid #2a2a44 !important;
+        border-radius: 12px !important;
+        padding: 0.5rem !important;
+    }
+    .stMetric label {
+        color: #8a8aa0 !important;
+    }
+    .stMetric div {
+        color: #e8e8f0 !important;
+    }
+    
+    /* Responsive */
+    @media (max-width: 640px) {
+        .main .block-container {
+            padding: 0.5rem 0.5rem 5rem 0.5rem !important;
+        }
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # ============================================================
 # SECTION 1: DEVICE FINGERPRINT FUNCTIONS
 # ============================================================
 def get_device_fingerprint():
-    """Get device fingerprint from query params (set by Android app or JavaScript)"""
     query_params = st.query_params
     fp = query_params.get('device_fp', None)
     if fp:
@@ -81,7 +253,6 @@ def get_device_fingerprint():
     return fp
 
 def get_device_id():
-    """Get user-friendly device ID"""
     fp = get_device_fingerprint()
     if fp and len(fp) >= 16:
         return f"DEV-{fp[:8].upper()}-{fp[-8:].upper()}"
@@ -138,7 +309,6 @@ def safe_str(val):
 # SECTION 3: TIME FUNCTIONS
 # ============================================================
 def get_online_time():
-    """Get current UTC time from online API"""
     try:
         time_apis = [
             "https://worldtimeapi.org/api/timezone/Etc/UTC",
@@ -165,9 +335,6 @@ def get_online_time():
 # SECTION 4: TOKEN GENERATION AND VALIDATION
 # ============================================================
 def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=""):
-    """
-    Generate token with embedded MAC addresses, IMEI, and Android IDs.
-    """
     current_time = get_online_time()
     if current_time is None:
         current_time = datetime.utcnow()
@@ -199,9 +366,6 @@ def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=
     return token
 
 def validate_device(device_to_check, allowed_devices_hashed):
-    """
-    Validate a device string against the allowed hashed devices.
-    """
     if not device_to_check or not allowed_devices_hashed:
         return False
     
@@ -220,7 +384,6 @@ def validate_device(device_to_check, allowed_devices_hashed):
     return False
 
 def validate_token(token, df, device_fingerprint=None):
-    """Validate token and automatically check device fingerprint"""
     try:
         token = token.strip()
         if '%' in token:
@@ -299,7 +462,6 @@ def validate_token(token, df, device_fingerprint=None):
 # SECTION 5: JAVASCRIPT INJECTIONS
 # ============================================================
 def inject_device_fingerprint_script():
-    """Capture device fingerprint from browser (for web testing)"""
     fingerprint_js = """
     <script>
     function getDeviceFingerprint() {
@@ -338,40 +500,7 @@ def inject_device_fingerprint_script():
     components.html(fingerprint_js, height=0)
 
 # ============================================================
-# SECTION 6: ADMIN AUTHENTICATION
-# ============================================================
-def show_admin_login():
-    """Show admin login as a centered card"""
-    st.markdown("""
-    <div style="display: flex; justify-content: center; align-items: center; min-height: 70vh; padding: 2rem;">
-        <div style="background: #1a1a2e; border-radius: 16px; padding: 2.5rem; max-width: 420px; width: 100%; border: 1px solid #2a2a44; box-shadow: 0 8px 30px rgba(0,0,0,0.5);">
-            <h2 style="color: #e8e8f0; text-align: center; margin-bottom: 0.5rem; font-size: 1.5rem;">🔒 Admin Access</h2>
-            <p style="color: #8a8aa0; text-align: center; margin-bottom: 1.5rem; font-size: 0.9rem;">Enter the admin password to access the dashboard</p>
-    """, unsafe_allow_html=True)
-    
-    with st.form("admin_login_form", clear_on_submit=False):
-        password = st.text_input(
-            "Password",
-            placeholder="Enter Admin Password",
-            type="password",
-            label_visibility="collapsed"
-        )
-        submitted = st.form_submit_button("🔓 Unlock", use_container_width=True)
-        
-        if submitted:
-            if password == ADMIN_PASSWORD:
-                st.session_state.admin_authenticated = True
-                st.rerun()
-            else:
-                st.error("❌ Invalid password. Please try again.")
-    
-    st.markdown("""
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ============================================================
-# SECTION 7: UI COMPONENTS
+# SECTION 6: UI COMPONENTS
 # ============================================================
 def app_header():
     online_time = get_online_time()
@@ -381,22 +510,76 @@ def app_header():
     device_id = get_device_id()
     
     st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%); padding: 0.8rem 1rem; margin: -0.5rem -0.8rem 1rem -0.8rem; border-bottom: 1px solid #2a2a44; position: sticky; top: 0; z-index: 999; backdrop-filter: blur(10px);">
-        <div style="display: flex; align-items: center; justify-content: space-between; max-width: 1200px; margin: 0 auto; flex-wrap: wrap; gap: 0.5rem;">
+    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%); 
+                padding: 0.8rem 1rem; 
+                margin: -0.5rem -0.8rem 1rem -0.8rem; 
+                border-bottom: 1px solid #2a2a44; 
+                position: sticky; 
+                top: 0; 
+                z-index: 999; 
+                backdrop-filter: blur(10px);">
+        <div style="display: flex; 
+                    align-items: center; 
+                    justify-content: space-between; 
+                    max-width: 1200px; 
+                    margin: 0 auto; 
+                    flex-wrap: wrap; 
+                    gap: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span style="font-size: 1.5rem;">🔒</span>
                 <span style="font-size: 1.1rem; font-weight: 700; color: #e8e8f0; text-shadow: 0 0 10px rgba(79, 140, 247, 0.3);">GPS Extractor</span>
-                <span style="background: rgba(79, 140, 247, 0.2); color: #4f8cf7; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.6rem; font-weight: 500; border: 1px solid rgba(79, 140, 247, 0.2); margin-left: 0.3rem;">Secure Access</span>
+                <span style="background: rgba(79, 140, 247, 0.2); 
+                           color: #4f8cf7; 
+                           padding: 0.15rem 0.6rem; 
+                           border-radius: 40px; 
+                           font-size: 0.6rem; 
+                           font-weight: 500; 
+                           border: 1px solid rgba(79, 140, 247, 0.2); 
+                           margin-left: 0.3rem;">Secure Access</span>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                <span style="background: #14141e; border-radius: 8px; padding: 0.3rem 0.8rem; border: 1px solid #2a2a44; font-size: 0.7rem; color: #8a8aa0; display: inline-flex; align-items: center; gap: 0.5rem;">
-                    🕐 <span class="{time_class}">{time_status}</span>
+                <span style="background: #14141e; 
+                           border-radius: 8px; 
+                           padding: 0.3rem 0.8rem; 
+                           border: 1px solid #2a2a44; 
+                           font-size: 0.7rem; 
+                           color: #8a8aa0; 
+                           display: inline-flex; 
+                           align-items: center; 
+                           gap: 0.5rem;">
+                    🕐 <span style="color: { '#34d399' if online_time else '#f87171' };">{time_status}</span>
                 </span>
-                <span style="background: #14141e; border-radius: 8px; padding: 0.3rem 0.8rem; border: 1px solid #34d399; font-size: 0.6rem; color: #8a8aa0; display: inline-flex; align-items: center; gap: 0.5rem;">
+                <span style="background: #14141e; 
+                           border-radius: 8px; 
+                           padding: 0.3rem 0.8rem; 
+                           border: 1px solid #34d399; 
+                           font-size: 0.6rem; 
+                           color: #8a8aa0; 
+                           display: inline-flex; 
+                           align-items: center; 
+                           gap: 0.5rem;">
                     📱 <span style="color:#34d399;">{device_id}</span>
                 </span>
-                <button onclick="location.href='/'" style="background: transparent; border: 1px solid #2a2a44; color: #b0b0c8; padding: 0.4rem 0.8rem; border-radius: 40px; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.2s;">🏠 Home</button>
-                <button onclick="location.href='?page=admin'" style="background: transparent; border: 1px solid #2a2a44; color: #b0b0c8; padding: 0.4rem 0.8rem; border-radius: 40px; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.2s;">⚙️ Admin</button>
+                <button onclick="location.href='/'" 
+                        style="background: transparent; 
+                               border: 1px solid #2a2a44; 
+                               color: #b0b0c8; 
+                               padding: 0.4rem 0.8rem; 
+                               border-radius: 40px; 
+                               font-size: 0.75rem; 
+                               font-weight: 500; 
+                               cursor: pointer; 
+                               transition: all 0.2s;">🏠 Home</button>
+                <button onclick="location.href='?page=admin'" 
+                        style="background: transparent; 
+                               border: 1px solid #2a2a44; 
+                               color: #b0b0c8; 
+                               padding: 0.4rem 0.8rem; 
+                               border-radius: 40px; 
+                               font-size: 0.75rem; 
+                               font-weight: 500; 
+                               cursor: pointer; 
+                               transition: all 0.2s;">⚙️ Admin</button>
             </div>
         </div>
     </div>
@@ -404,14 +587,18 @@ def app_header():
 
 def secure_card(title, content):
     st.markdown(f"""
-    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #2a2a44; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+    <div style="background: #1a1a2e; 
+                border-radius: 16px; 
+                padding: 1.5rem; 
+                margin: 1rem 0; 
+                border: 1px solid #2a2a44; 
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
         <h2 style="color: #e8e8f0; margin-bottom: 0.5rem; font-weight: 700;">{title}</h2>
         <p style="color: #c0c0d0; font-size: 0.95rem; line-height: 1.6;">{content}</p>
     </div>
     """, unsafe_allow_html=True)
 
 def site_card(site_data, search_term=""):
-    """Display a single site card"""
     site_name = safe_str(site_data.get('SITE', ''))
     plaid = safe_str(site_data.get('PLAID', ''))
     region = safe_str(site_data.get('REGION', ''))
@@ -431,26 +618,61 @@ def site_card(site_data, search_term=""):
     contact = safe_str(site_data.get('CONTACT NUMBER', ''))
     
     fo_display = fo_onsite if fo_onsite else "No FO assigned"
-    fo_class = "fo-name" if fo_onsite else "missing"
     
     # Highlight search terms
     if search_term:
         site_name = site_name.replace(search_term, f'<span style="background: #fbbf24; color: #0a0a0f; padding: 0.05rem 0.2rem; border-radius: 3px; font-weight: 600;">{search_term}</span>')
+        plaid = plaid.replace(search_term, f'<span style="background: #fbbf24; color: #0a0a0f; padding: 0.05rem 0.2rem; border-radius: 3px; font-weight: 600;">{search_term}</span>')
     
     st.markdown(f"""
-    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.2rem; margin-bottom: 0.8rem; border: 1px solid #2a2a44; transition: all 0.3s; animation: fadeIn 0.4s ease-out;">
-        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+    <div style="background: #1a1a2e; 
+                border-radius: 16px; 
+                padding: 1.2rem; 
+                margin-bottom: 0.8rem; 
+                border: 1px solid #2a2a44; 
+                transition: all 0.3s; 
+                animation: fadeIn 0.4s ease-out;">
+        <div style="display: flex; 
+                    flex-wrap: wrap; 
+                    justify-content: space-between; 
+                    align-items: flex-start; 
+                    gap: 0.5rem; 
+                    margin-bottom: 0.5rem;">
             <div>
                 <span style="font-size: 1.1rem; font-weight: 600; color: #e8e8f0;">{site_name}</span>
-                <span style="background: rgba(139, 92, 246, 0.25); color: #a78bfa; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.65rem; font-weight: 600; border: 1px solid rgba(139, 92, 246, 0.2); display: inline-block; margin-left: 0.3rem;">{plaid}</span>
+                <span style="background: rgba(139, 92, 246, 0.25); 
+                           color: #a78bfa; 
+                           padding: 0.15rem 0.6rem; 
+                           border-radius: 40px; 
+                           font-size: 0.65rem; 
+                           font-weight: 600; 
+                           border: 1px solid rgba(139, 92, 246, 0.2); 
+                           display: inline-block; 
+                           margin-left: 0.3rem;">{plaid}</span>
             </div>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <span style="background: rgba(52, 211, 153, 0.15); color: #34d399; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.6rem; font-weight: 500; border: 1px solid rgba(52, 211, 153, 0.2);">Territory {territory}</span>
-                <span style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.6rem; font-weight: 500; border: 1px solid rgba(251, 191, 36, 0.2);">{towerco}</span>
+                <span style="background: rgba(52, 211, 153, 0.15); 
+                           color: #34d399; 
+                           padding: 0.15rem 0.6rem; 
+                           border-radius: 40px; 
+                           font-size: 0.6rem; 
+                           font-weight: 500; 
+                           border: 1px solid rgba(52, 211, 153, 0.2);">Territory {territory}</span>
+                <span style="background: rgba(251, 191, 36, 0.15); 
+                           color: #fbbf24; 
+                           padding: 0.15rem 0.6rem; 
+                           border-radius: 40px; 
+                           font-size: 0.6rem; 
+                           font-weight: 500; 
+                           border: 1px solid rgba(251, 191, 36, 0.2);">{towerco}</span>
             </div>
         </div>
         <div style="font-size: 0.85rem; color: #b0b0c8; margin-bottom: 0.5rem;">{region} · {province} · {municipality} · {barangay}</div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1rem; margin: 0.5rem 0; font-size: 0.8rem;">
+        <div style="display: grid; 
+                    grid-template-columns: 1fr 1fr; 
+                    gap: 0.3rem 1rem; 
+                    margin: 0.5rem 0; 
+                    font-size: 0.8rem;">
             <div style="display: flex; flex-direction: column; gap: 0.05rem;">
                 <span style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Address</span>
                 <span style="color: #d0d0e0; font-weight: 500; font-size: 0.85rem;">{site_add}</span>
@@ -476,21 +698,63 @@ def site_card(site_data, search_term=""):
         try:
             float(lat); float(lon)
             maps_url = f"https://www.google.com/maps?q={lat},{lon}"
-            st.markdown(f'<a href="{maps_url}" target="_blank" style="background: #4f8cf7; color: white; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;">🗺️ Navigate</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="{maps_url}" target="_blank" style="background: #4f8cf7; color: white; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; border: none; cursor: pointer;">🗺️ Navigate</a>', unsafe_allow_html=True)
         except:
-            st.markdown('<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">⚠️ Invalid</span>', unsafe_allow_html=True)
+            st.markdown('<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">⚠️ Invalid coordinates</span>', unsafe_allow_html=True)
     else:
-        st.markdown('<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">⚠️ No coords</span>', unsafe_allow_html=True)
+        st.markdown('<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">⚠️ No coordinates</span>', unsafe_allow_html=True)
     
     # Call button
     if contact:
         clean_contact = ''.join(ch for ch in contact if ch.isdigit() or ch == '+')
         if clean_contact:
-            st.markdown(f'<a href="tel:{clean_contact}" style="background: #34d399; color: #0a0a0f; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;">📞 Call FO</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="tel:{clean_contact}" style="background: #34d399; color: #0a0a0f; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; border: none; cursor: pointer;">📞 Call FO</a>', unsafe_allow_html=True)
         else:
             st.markdown(f'<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">📞 {contact}</span>', unsafe_allow_html=True)
     else:
         st.markdown('<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">📞 No contact</span>', unsafe_allow_html=True)
+    
+    st.markdown("""
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ============================================================
+# SECTION 7: ADMIN LOGIN
+# ============================================================
+def show_admin_login():
+    st.markdown("""
+    <div style="display: flex; 
+                justify-content: center; 
+                align-items: center; 
+                min-height: 70vh; 
+                padding: 2rem;">
+        <div style="background: #1a1a2e; 
+                    border-radius: 16px; 
+                    padding: 2.5rem; 
+                    max-width: 420px; 
+                    width: 100%; 
+                    border: 1px solid #2a2a44; 
+                    box-shadow: 0 8px 30px rgba(0,0,0,0.5);">
+            <h2 style="color: #e8e8f0; text-align: center; margin-bottom: 0.5rem; font-size: 1.5rem;">🔒 Admin Access</h2>
+            <p style="color: #8a8aa0; text-align: center; margin-bottom: 1.5rem; font-size: 0.9rem;">Enter the admin password to access the dashboard</p>
+    """, unsafe_allow_html=True)
+    
+    with st.form("admin_login_form", clear_on_submit=False):
+        password = st.text_input(
+            "Password",
+            placeholder="Enter Admin Password",
+            type="password",
+            label_visibility="collapsed"
+        )
+        submitted = st.form_submit_button("🔓 Unlock", use_container_width=True)
+        
+        if submitted:
+            if password == ADMIN_PASSWORD:
+                st.session_state.admin_authenticated = True
+                st.rerun()
+            else:
+                st.error("❌ Invalid password. Please try again.")
     
     st.markdown("""
         </div>
@@ -525,7 +789,12 @@ def show_admin_dashboard():
     st.session_state.df = df
     
     st.markdown("""
-    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #2a2a44; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+    <div style="background: #1a1a2e; 
+                border-radius: 16px; 
+                padding: 1.5rem; 
+                margin: 1rem 0; 
+                border: 1px solid #2a2a44; 
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
         <h2 style="color: #e8e8f0; margin-bottom: 0.5rem; font-weight: 700;">⚙️ Admin Dashboard</h2>
         <p style="color: #c0c0d0; font-size: 0.95rem; line-height: 1.6;">
             Generate secure links with <strong style="color: #34d399;">MAC Address / IMEI / Android ID</strong> verification.
@@ -539,7 +808,11 @@ def show_admin_dashboard():
     
     device_id = get_device_id()
     st.markdown(f"""
-    <div style="background: #14141e; border-radius: 12px; padding: 0.8rem; border: 1px solid #34d399; margin: 0.5rem 0;">
+    <div style="background: #14141e; 
+                border-radius: 12px; 
+                padding: 0.8rem; 
+                border: 1px solid #34d399; 
+                margin: 0.5rem 0;">
         <div style="color: #34d399; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">📱 Your Device ID (For Testing)</div>
         <div style="color: #d0d0e0; font-family: monospace; font-size: 0.85rem;">{device_id}</div>
         <div style="color: #8a8aa0; font-size: 0.7rem;">For Android app, use actual MAC Address, IMEI, or Android ID</div>
@@ -570,13 +843,13 @@ def show_admin_dashboard():
             if site_data:
                 found = True
                 st.success(f"✅ Found site: {site_data.get('SITE', '')}")
-                site_card(site_data)
+                site_card(site_data, search_term)
             else:
                 site_data = get_site_by_name(df, search_term)
                 if site_data:
                     found = True
                     st.success(f"✅ Found site: {site_data.get('SITE', '')}")
-                    site_card(site_data)
+                    site_card(site_data, search_term)
             
             if not found:
                 st.warning(f"⚠️ No site found matching: '{search_term}'")
@@ -620,20 +893,24 @@ def show_admin_dashboard():
                 user_name = st.text_input("User Name", placeholder="John Doe", key="single_name")
             
             st.markdown("""
-            <div style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border: 1px solid #34d399; border-radius: 12px;">
+            <div style="background: #14141e; 
+                        padding: 0.8rem; 
+                        margin: 0.5rem 0; 
+                        border: 1px solid #34d399; 
+                        border-radius: 12px;">
                 <p style="color: #34d399; font-weight: 600; margin: 0;">📱 <strong>MAC Address / IMEI / Android ID Verification</strong></p>
                 <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0.3rem 0 0 0;">
                     Enter the user's actual device identifiers:<br>
-                    <span style="color: #34d399;">MAC Address</span>: <code>AA:BB:CC:DD:EE:FF</code><br>
-                    <span style="color: #fbbf24;">IMEI</span>: <code>123456789012345</code> (15 digits)<br>
-                    <span style="color: #60a5fa;">Android ID</span>: <code>ANDROID:abc123def456</code>
+                    <span style="color: #34d399;">MAC Address</span>: <code style="color: #fbbf24;">AA:BB:CC:DD:EE:FF</code><br>
+                    <span style="color: #fbbf24;">IMEI</span>: <code style="color: #fbbf24;">123456789012345</code> (15 digits)<br>
+                    <span style="color: #60a5fa;">Android ID</span>: <code style="color: #fbbf24;">ANDROID:abc123def456</code>
                 </p>
             </div>
             """, unsafe_allow_html=True)
             
             device_identifiers = st.text_area(
                 "Device Identifiers (one per line, or comma separated)",
-                placeholder="MAC:AA:BB:CC:DD:EE:FF\nIMEI:123456789012345\nANDROID:abc123def456\nANDROIDID:d094968680211a30",
+                placeholder="MAC:AA:BB:CC:DD:EE:FF\nIMEI:123456789012345\nANDROID:abc123def456",
                 key="single_devices",
                 help="Format: MAC:AA:BB:CC:DD:EE:FF or IMEI:123456789012345 or ANDROID:abc123def456"
             )
@@ -665,14 +942,28 @@ def show_admin_dashboard():
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"""
-                        <div style="background: #0d0d1a; border-radius: 8px; padding: 0.8rem; border: 1px solid #2a2a44; font-family: 'Courier New', monospace; color: #fbbf24; word-break: break-all; font-size: 0.8rem; margin: 0.5rem 0;">
+                        <div style="background: #0d0d1a; 
+                                    border-radius: 8px; 
+                                    padding: 0.8rem; 
+                                    border: 1px solid #2a2a44; 
+                                    font-family: 'Courier New', monospace; 
+                                    word-break: break-all; 
+                                    font-size: 0.8rem; 
+                                    margin: 0.5rem 0;">
                             <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">🔗 Secure Link</div>
-                            <code style="word-break: break-all; font-size: 0.7rem;">{link}</code>
+                            <code style="color: #fbbf24; word-break: break-all; font-size: 0.7rem;">{link}</code>
                         </div>
                         """, unsafe_allow_html=True)
                     with col2:
                         st.markdown(f"""
-                        <div style="background: #0d0d1a; border-radius: 8px; padding: 0.8rem; border: 1px solid #2a2a44; font-family: 'Courier New', monospace; color: #fbbf24; word-break: break-all; font-size: 0.8rem; margin: 0.5rem 0;">
+                        <div style="background: #0d0d1a; 
+                                    border-radius: 8px; 
+                                    padding: 0.8rem; 
+                                    border: 1px solid #2a2a44; 
+                                    font-family: 'Courier New', monospace; 
+                                    word-break: break-all; 
+                                    font-size: 0.8rem; 
+                                    margin: 0.5rem 0;">
                             <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">📋 Token Info</div>
                             <div style="color: #d0d0e0;">👤 User: {user_name}</div>
                             <div style="color: #d0d0e0;">📧 Email: {user_email}</div>
@@ -693,8 +984,12 @@ def show_admin_dashboard():
         st.subheader("📦 Batch Generate Links")
         
         st.markdown("""
-        <div style="background: #14141e; padding: 1rem; border: 1px solid #2a2a44; border-radius: 12px; margin: 0.5rem 0;">
-            <p style="color: #b0b0c8; font-size: 0.9rem;">Enter multiple PLAIDs or Site Names separated by commas.<br>Example: <code>MIN881, MIN806, Site Alpha</code></p>
+        <div style="background: #14141e; 
+                    padding: 1rem; 
+                    border: 1px solid #2a2a44; 
+                    border-radius: 12px; 
+                    margin: 0.5rem 0;">
+            <p style="color: #b0b0c8; font-size: 0.9rem;">Enter multiple PLAIDs or Site Names separated by commas.<br>Example: <code style="color: #fbbf24;">MIN881, MIN806, Site Alpha</code></p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -712,12 +1007,16 @@ def show_admin_dashboard():
             batch_name = st.text_input("User Name", placeholder="John Doe", key="batch_name")
         
         st.markdown("""
-        <div style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border: 1px solid #34d399; border-radius: 12px;">
+        <div style="background: #14141e; 
+                    padding: 0.8rem; 
+                    margin: 0.5rem 0; 
+                    border: 1px solid #34d399; 
+                    border-radius: 12px;">
             <p style="color: #34d399; font-size: 0.8rem; margin: 0;">
                 📱 Device identifiers that will apply to ALL generated links:<br>
-                <span style="color: #34d399;">MAC Address</span>: <code>AA:BB:CC:DD:EE:FF</code><br>
-                <span style="color: #fbbf24;">IMEI</span>: <code>123456789012345</code><br>
-                <span style="color: #60a5fa;">Android ID</span>: <code>ANDROID:abc123def456</code>
+                <span style="color: #34d399;">MAC Address</span>: <code style="color: #fbbf24;">AA:BB:CC:DD:EE:FF</code><br>
+                <span style="color: #fbbf24;">IMEI</span>: <code style="color: #fbbf24;">123456789012345</code><br>
+                <span style="color: #60a5fa;">Android ID</span>: <code style="color: #fbbf24;">ANDROID:abc123def456</code>
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -819,10 +1118,26 @@ def show_admin_dashboard():
                     
                     for link_info in generated_links:
                         st.markdown(f"""
-                        <div style="background: #1a1a2e; border-radius: 8px; padding: 0.5rem 0.8rem; margin: 0.2rem 0; border: 1px solid #2a2a44; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <div style="background: #1a1a2e; 
+                                    border-radius: 8px; 
+                                    padding: 0.5rem 0.8rem; 
+                                    margin: 0.2rem 0; 
+                                    border: 1px solid #2a2a44; 
+                                    display: flex; 
+                                    justify-content: space-between; 
+                                    align-items: center; 
+                                    flex-wrap: wrap; 
+                                    gap: 0.5rem;">
                             <span style="color: #4f8cf7; font-weight: 600; font-size: 0.8rem;">#{link_info['number']}</span>
                             <span style="color: #fbbf24; font-family: monospace; font-size: 0.7rem; word-break: break-all; flex: 1;">{link_info['link']}</span>
-                            <button onclick="navigator.clipboard.writeText('{link_info['link']}')" style="background: #2a2a44; color: #a0a0b8; border: none; border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.65rem; cursor: pointer;">📋 Copy</button>
+                            <button onclick="navigator.clipboard.writeText('{link_info['link']}')" 
+                                    style="background: #2a2a44; 
+                                           color: #a0a0b8; 
+                                           border: none; 
+                                           border-radius: 4px; 
+                                           padding: 0.2rem 0.6rem; 
+                                           font-size: 0.65rem; 
+                                           cursor: pointer;">📋 Copy</button>
                         </div>
                         """, unsafe_allow_html=True)
                     
@@ -833,8 +1148,18 @@ def show_admin_dashboard():
                     for result in results:
                         if result['status'] == 'success':
                             st.markdown(f"""
-                            <div style="background: #14141e; border-radius: 12px; padding: 1rem; margin: 0.5rem 0; border: 1px solid #34d399;">
-                                <div style="padding: 0.3rem 0; border-bottom: 1px solid #1a1a2e; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <div style="background: #14141e; 
+                                        border-radius: 12px; 
+                                        padding: 1rem; 
+                                        margin: 0.5rem 0; 
+                                        border: 1px solid #34d399;">
+                                <div style="padding: 0.3rem 0; 
+                                            border-bottom: 1px solid #1a1a2e; 
+                                            display: flex; 
+                                            justify-content: space-between; 
+                                            align-items: center; 
+                                            flex-wrap: wrap; 
+                                            gap: 0.5rem;">
                                     <div>
                                         <strong style="color: #e8e8f0;">{result['site']}</strong>
                                         <span style="color: #8a8aa0; font-size: 0.8rem; margin-left: 0.5rem;">{result['plaid']}</span>
@@ -848,8 +1173,18 @@ def show_admin_dashboard():
                             """, unsafe_allow_html=True)
                         else:
                             st.markdown(f"""
-                            <div style="background: #14141e; border-radius: 12px; padding: 1rem; margin: 0.5rem 0; border: 1px solid #ef4444;">
-                                <div style="padding: 0.3rem 0; border-bottom: 1px solid #1a1a2e; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <div style="background: #14141e; 
+                                        border-radius: 12px; 
+                                        padding: 1rem; 
+                                        margin: 0.5rem 0; 
+                                        border: 1px solid #ef4444;">
+                                <div style="padding: 0.3rem 0; 
+                                            border-bottom: 1px solid #1a1a2e; 
+                                            display: flex; 
+                                            justify-content: space-between; 
+                                            align-items: center; 
+                                            flex-wrap: wrap; 
+                                            gap: 0.5rem;">
                                     <div>
                                         <strong style="color: #f87171;">{result['input']}</strong>
                                     </div>
@@ -917,7 +1252,11 @@ def show_site_viewer(token):
     
     if df is None or df.empty:
         st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #f59e0b; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        <div style="background: #1a1a2e; 
+                    border-radius: 16px; 
+                    padding: 1.5rem; 
+                    border: 1px solid #f59e0b; 
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
             <h2 style="color: #f59e0b;">⚠️ Data Not Available</h2>
             <p style="color: #c0c0d0;">The site data is not available. Please contact the administrator.</p>
         </div>
@@ -935,26 +1274,54 @@ def show_site_viewer(token):
     
     if error:
         st.markdown(f"""
-        <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #ef4444; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        <div style="background: #1a1a2e; 
+                    border-radius: 16px; 
+                    padding: 1.5rem; 
+                    border: 1px solid #ef4444; 
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
             <h2 style="color: #ef4444;">🔒 Access Denied</h2>
             <p style="color: #d0d0e0;">{error}</p>
             <p style="color: #8a8aa0; font-size: 0.85rem;">Your device could not be verified. Please ensure your device is registered.</p>
-            <div style="background: #1a1a2e; border-radius: 8px; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #2a2a44;">
+            <div style="background: #1a1a2e; 
+                        border-radius: 8px; 
+                        padding: 0.5rem; 
+                        margin: 0.5rem 0; 
+                        border: 1px solid #2a2a44;">
                 <div style="color: #34d399; font-size: 0.7rem;">Your Device ID: <code style="color: #60a5fa;">{get_device_id()}</code></div>
                 <div style="color: #8a8aa0; font-size: 0.6rem;">Contact the administrator to register this device</div>
             </div>
             <br>
-            <button onclick="location.href='/'" style="background: #4f8cf7; color: white; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer;">🏠 Return to Home</button>
+            <button onclick="location.href='/'" 
+                    style="background: #4f8cf7; 
+                           color: white; 
+                           padding: 0.5rem 1.2rem; 
+                           border-radius: 40px; 
+                           font-size: 0.8rem; 
+                           font-weight: 600; 
+                           border: none; 
+                           cursor: pointer;">🏠 Return to Home</button>
         </div>
         """, unsafe_allow_html=True)
         return
     
     if not site_data:
         st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #f59e0b; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        <div style="background: #1a1a2e; 
+                    border-radius: 16px; 
+                    padding: 1.5rem; 
+                    border: 1px solid #f59e0b; 
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
             <h2 style="color: #f59e0b;">⚠️ Site Not Found</h2>
             <p style="color: #c0c0d0;">The requested site could not be found in the database.</p>
-            <button onclick="location.href='/'" style="background: #4f8cf7; color: white; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer;">🏠 Return to Home</button>
+            <button onclick="location.href='/'" 
+                    style="background: #4f8cf7; 
+                           color: white; 
+                           padding: 0.5rem 1.2rem; 
+                           border-radius: 40px; 
+                           font-size: 0.8rem; 
+                           font-weight: 600; 
+                           border: none; 
+                           cursor: pointer;">🏠 Return to Home</button>
         </div>
         """, unsafe_allow_html=True)
         return
@@ -967,14 +1334,33 @@ def show_site_viewer(token):
     device_count = site_data.get('_device_count', 0)
     
     st.markdown(f"""
-    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #34d399; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+    <div style="background: #1a1a2e; 
+                border-radius: 16px; 
+                padding: 1.5rem; 
+                border: 1px solid #34d399; 
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        <div style="display: flex; 
+                    justify-content: space-between; 
+                    align-items: center; 
+                    flex-wrap: wrap;">
             <div>
                 <h2 style="color: #e8e8f0; margin: 0;">{site_data.get('SITE', 'Unknown Site')}</h2>
-                <span style="background: rgba(139, 92, 246, 0.25); color: #a78bfa; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.65rem; font-weight: 600; border: 1px solid rgba(139, 92, 246, 0.2); display: inline-block;">{site_data.get('PLAID', 'No ID')}</span>
+                <span style="background: rgba(139, 92, 246, 0.25); 
+                           color: #a78bfa; 
+                           padding: 0.15rem 0.6rem; 
+                           border-radius: 40px; 
+                           font-size: 0.65rem; 
+                           font-weight: 600; 
+                           border: 1px solid rgba(139, 92, 246, 0.2); 
+                           display: inline-block;">{site_data.get('PLAID', 'No ID')}</span>
             </div>
             <div style="text-align: right;">
-                <span style="background: rgba(52, 211, 153, 0.2); color: #34d399; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.65rem; border: 1px solid rgba(52, 211, 153, 0.2);">🔒 Secure Access</span>
+                <span style="background: rgba(52, 211, 153, 0.2); 
+                           color: #34d399; 
+                           padding: 0.15rem 0.6rem; 
+                           border-radius: 40px; 
+                           font-size: 0.65rem; 
+                           border: 1px solid rgba(52, 211, 153, 0.2);">🔒 Secure Access</span>
                 <br>
                 <span style="color: #8a8aa0; font-size: 0.7rem;">{time_source}</span>
                 <br>
@@ -988,14 +1374,12 @@ def show_site_viewer(token):
     </div>
     """, unsafe_allow_html=True)
     
-    # Show site details using the site_card function
     site_card(site_data)
 
 # ============================================================
 # SECTION 10: API ENDPOINT
 # ============================================================
 def api_validate():
-    """API endpoint for Android app validation"""
     try:
         token = st.query_params.get('token', '').strip()
         device_fingerprint = st.query_params.get('device_fp', '').strip()
@@ -1062,7 +1446,11 @@ def show_main():
         return
     
     st.markdown("""
-    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #2a2a44; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+    <div style="background: #1a1a2e; 
+                border-radius: 16px; 
+                padding: 1.5rem; 
+                border: 1px solid #2a2a44; 
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
         <h2 style="color: #e8e8f0; margin-bottom: 0.5rem; font-weight: 700;">🔐 Secure Site Access</h2>
         <p style="color: #c0c0d0; font-size: 0.95rem; line-height: 1.6;">Enter your secure link to access site details.</p>
         <p style="color: #8a8aa0; font-size: 0.85rem;">
@@ -1098,8 +1486,26 @@ def show_main():
         st.rerun()
     
     st.markdown("""
-    <div style="position: fixed; bottom: 0; left: 0; right: 0; background: #14141e; border-top: 1px solid #2a2a44; display: flex; justify-content: space-around; padding: 0.4rem 0.5rem; z-index: 1000; backdrop-filter: blur(10px);">
-        <span style="display: flex; flex-direction: column; align-items: center; gap: 0.1rem; padding: 0.3rem 0.8rem; border-radius: 12px; color: #4f8cf7; font-size: 0.55rem; font-weight: 500;">
+    <div style="position: fixed; 
+                bottom: 0; 
+                left: 0; 
+                right: 0; 
+                background: #14141e; 
+                border-top: 1px solid #2a2a44; 
+                display: flex; 
+                justify-content: space-around; 
+                padding: 0.4rem 0.5rem; 
+                z-index: 1000; 
+                backdrop-filter: blur(10px);">
+        <span style="display: flex; 
+                     flex-direction: column; 
+                     align-items: center; 
+                     gap: 0.1rem; 
+                     padding: 0.3rem 0.8rem; 
+                     border-radius: 12px; 
+                     color: #4f8cf7; 
+                     font-size: 0.55rem; 
+                     font-weight: 500;">
             <span style="font-size: 1.2rem;">📍</span>
             Site
         </span>
