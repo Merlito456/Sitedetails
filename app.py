@@ -16,6 +16,7 @@ import json
 import platform
 import sys
 import uuid
+import random  # <-- ADD THIS IMPORT
 
 # ------------------------------
 # PAGE CONFIG
@@ -1230,7 +1231,6 @@ def show_admin_dashboard():
                     col1, col2 = st.columns(2)
                     with col1:
                         # Generate a unique ID for the copy button
-                        import random
                         btn_id = f"copy_single_{random.randint(1000, 9999)}"
                         escaped_link = link.replace("'", "\\'").replace('"', '\\"')
                         st.markdown(f"""
