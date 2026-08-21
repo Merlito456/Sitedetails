@@ -220,15 +220,28 @@ st.markdown("""
         color: #a0a0b8;
         border: none;
         border-radius: 4px;
-        padding: 0.2rem 0.8rem;
+        padding: 0.3rem 1rem;
         font-size: 0.7rem;
         cursor: pointer;
         transition: all 0.2s;
         margin-top: 0.3rem;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        min-height: 36px;
+        min-width: 60px;
     }
     .token-copy-btn:hover {
         background: #3a3a5e;
         color: #e8e8f0;
+    }
+    .token-copy-btn:active {
+        background: #4f8cf7;
+        color: white;
+        transform: scale(0.95);
+    }
+    .token-copy-btn.copied {
+        background: #34d399;
+        color: #0a0a0f;
     }
 
     .token-list-container {
@@ -272,13 +285,26 @@ st.markdown("""
         color: #a0a0b8;
         border: none;
         border-radius: 4px;
-        padding: 0.15rem 0.6rem;
+        padding: 0.3rem 0.8rem;
         font-size: 0.6rem;
         cursor: pointer;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        min-height: 32px;
+        min-width: 50px;
     }
     .token-item .t-copy:hover {
         background: #3a3a5e;
         color: #e8e8f0;
+    }
+    .token-item .t-copy:active {
+        background: #4f8cf7;
+        color: white;
+        transform: scale(0.95);
+    }
+    .token-item .t-copy.copied {
+        background: #34d399;
+        color: #0a0a0f;
     }
 
     .combined-tokens-box {
@@ -314,16 +340,26 @@ st.markdown("""
         color: white;
         border: none;
         border-radius: 4px;
-        padding: 0.4rem 1rem;
+        padding: 0.5rem 1.2rem;
         font-size: 0.8rem;
         cursor: pointer;
         margin-top: 0.5rem;
         transition: all 0.2s;
         font-weight: 600;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        min-height: 40px;
     }
     .combined-tokens-box .copy-all-btn:hover {
         background: #3a7bd5;
         transform: scale(1.02);
+    }
+    .combined-tokens-box .copy-all-btn:active {
+        transform: scale(0.95);
+    }
+    .combined-tokens-box .copy-all-btn.copied {
+        background: #34d399;
+        color: #0a0a0f;
     }
 
     .stDateInput label {
@@ -354,6 +390,14 @@ st.markdown("""
         .combined-tokens-box .tokens {
             font-size: 0.6rem;
             max-height: 150px;
+        }
+        .token-copy-btn, .token-item .t-copy {
+            min-height: 44px;
+            min-width: 70px;
+        }
+        .combined-tokens-box .copy-all-btn {
+            min-height: 48px;
+            width: 100%;
         }
     }
     </style>
@@ -650,6 +694,100 @@ def inject_device_fingerprint_script():
     """
     components.html(fingerprint_js, height=0)
 
+def inject_copy_script():
+    """Universal copy function that works on both PC and mobile"""
+    copy_js = """
+    <script>
+    (function() {
+        // Universal copy function
+        window.universalCopy = function(text, buttonId) {
+            // Method 1: Try using the modern clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function() {
+                    showCopiedFeedback(buttonId);
+                }).catch(function() {
+                    // Fallback to execCommand if clipboard API fails
+                    fallbackCopy(text, buttonId);
+                });
+            } else {
+                // Method 2: Fallback using execCommand
+                fallbackCopy(text, buttonId);
+            }
+        };
+        
+        function fallbackCopy(text, buttonId) {
+            // Create a temporary textarea
+            var textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-9999px';
+            textarea.style.left = '-9999px';
+            textarea.style.width = '1px';
+            textarea.style.height = '1px';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            
+            // Select and copy
+            textarea.focus();
+            textarea.select();
+            
+            try {
+                var successful = document.execCommand('copy');
+                if (successful) {
+                    showCopiedFeedback(buttonId);
+                } else {
+                    // Method 3: Last resort - prompt user to copy manually
+                    promptCopy(text, buttonId);
+                }
+            } catch (err) {
+                promptCopy(text, buttonId);
+            }
+            
+            document.body.removeChild(textarea);
+        }
+        
+        function promptCopy(text, buttonId) {
+            // Mobile fallback: show text in a prompt for manual copy
+            var msg = "Please copy this text:\\n\\n" + text;
+            var result = prompt(msg, text);
+            if (result !== null) {
+                showCopiedFeedback(buttonId);
+            }
+        }
+        
+        function showCopiedFeedback(buttonId) {
+            var btn = document.getElementById(buttonId);
+            if (btn) {
+                var originalText = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                btn.classList.add('copied');
+                setTimeout(function() {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }
+        }
+        
+        // Listen for click events on copy buttons
+        document.addEventListener('click', function(e) {
+            var target = e.target;
+            // Check if it's a copy button or contains a copy button
+            var btn = target.closest('.token-copy-btn, .t-copy, .copy-all-btn');
+            if (btn) {
+                var text = btn.getAttribute('data-copy-text');
+                if (text) {
+                    e.preventDefault();
+                    universalCopy(text, btn.id);
+                }
+            }
+        });
+        
+        console.log('Universal copy script loaded');
+    })();
+    </script>
+    """
+    components.html(copy_js, height=0)
+
 # ============================================================
 # SECTION 6: UI COMPONENTS
 # ============================================================
@@ -900,6 +1038,8 @@ def show_admin_login():
 # SECTION 8: ADMIN DASHBOARD
 # ============================================================
 def show_admin_dashboard():
+    # Inject copy script
+    inject_copy_script()
     app_header()
     
     df = load_excel_data("database.xlsx")
@@ -1089,6 +1229,10 @@ def show_admin_dashboard():
                     
                     col1, col2 = st.columns(2)
                     with col1:
+                        # Generate a unique ID for the copy button
+                        import random
+                        btn_id = f"copy_single_{random.randint(1000, 9999)}"
+                        escaped_link = link.replace("'", "\\'").replace('"', '\\"')
                         st.markdown(f"""
                         <div style="background: #0d0d1a; 
                                     border-radius: 8px; 
@@ -1097,6 +1241,12 @@ def show_admin_dashboard():
                                     margin: 0.5rem 0;">
                             <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">🔗 Secure Link</div>
                             <code style="color: #fbbf24; word-break: break-all; font-size: 0.7rem;">{link}</code>
+                            <button id="{btn_id}" 
+                                    class="token-copy-btn" 
+                                    data-copy-text="{escaped_link}"
+                                    style="display: block; margin-top: 0.5rem;">
+                                📋 Copy
+                            </button>
                         </div>
                         """, unsafe_allow_html=True)
                     with col2:
@@ -1274,12 +1424,18 @@ def show_admin_dashboard():
                     st.markdown("Copy all tokens at once (t1, t2, t3...)")
                     
                     combined_text = "\n".join(combined_tokens)
+                    escaped_combined = combined_text.replace("'", "\\'").replace('"', '\\"')
+                    copy_all_id = f"copy_all_{random.randint(1000, 9999)}"
                     
                     st.markdown(f"""
                     <div class="combined-tokens-box">
                         <div class="title">📋 All Tokens (Combined)</div>
                         <div class="tokens">{combined_text}</div>
-                        <button class="copy-all-btn" onclick="navigator.clipboard.writeText(`{combined_text.replace('`', '\\`')}`)">📋 Copy All Tokens</button>
+                        <button id="{copy_all_id}" 
+                                class="copy-all-btn" 
+                                data-copy-text="{escaped_combined}">
+                            📋 Copy All Tokens
+                        </button>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -1294,11 +1450,17 @@ def show_admin_dashboard():
                     """, unsafe_allow_html=True)
                     
                     for link_info in generated_links:
+                        escaped_link = link_info['link'].replace("'", "\\'").replace('"', '\\"')
+                        copy_id = f"copy_t{link_info['number']}_{random.randint(1000, 9999)}"
                         st.markdown(f"""
                         <div class="token-item">
                             <span class="t-number">t{link_info['number']}</span>
                             <span class="t-value">{link_info['link']}</span>
-                            <button class="t-copy" onclick="navigator.clipboard.writeText('{link_info['link']}')">📋 Copy</button>
+                            <button id="{copy_id}" 
+                                    class="t-copy" 
+                                    data-copy-text="{escaped_link}">
+                                📋 Copy
+                            </button>
                         </div>
                         """, unsafe_allow_html=True)
                     
@@ -1310,11 +1472,17 @@ def show_admin_dashboard():
                     """, unsafe_allow_html=True)
                     
                     for link_info in generated_links:
+                        escaped_link = link_info['link'].replace("'", "\\'").replace('"', '\\"')
+                        copy_id = f"copy_full_{link_info['number']}_{random.randint(1000, 9999)}"
                         st.markdown(f"""
                         <div class="token-display-box">
                             <div class="token-label">t{link_info['number']} - {link_info['site']} ({link_info['plaid']})</div>
                             <div class="token-value">{link_info['link']}</div>
-                            <button class="token-copy-btn" onclick="navigator.clipboard.writeText('{link_info['link']}')">📋 Copy Link</button>
+                            <button id="{copy_id}" 
+                                    class="token-copy-btn" 
+                                    data-copy-text="{escaped_link}">
+                                📋 Copy Link
+                            </button>
                         </div>
                         """, unsafe_allow_html=True)
                     
@@ -1576,6 +1744,8 @@ def api_validate():
 # ============================================================
 def show_main():
     inject_device_fingerprint_script()
+    # Inject copy script for any copy functionality
+    inject_copy_script()
     app_header()
     
     query_params = st.query_params
