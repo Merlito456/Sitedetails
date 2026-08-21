@@ -44,8 +44,6 @@ if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
 if 'batch_links' not in st.session_state:
     st.session_state.batch_links = []
-if 'show_admin_login' not in st.session_state:
-    st.session_state.show_admin_login = False
 
 # ------------------------------
 # SECURITY CONFIG
@@ -54,9 +52,9 @@ TOKEN_EXPIRY_DAYS = 30
 SECRET_KEY = "YOUR_SECRET_KEY_HERE_CHANGE_THIS_TO_A_RANDOM_STRING_12345"
 ADMIN_PASSWORD = "N0k1A"
 
-# ------------------------------
-# DEVICE FINGERPRINT FUNCTIONS
-# ------------------------------
+# ============================================================
+# SECTION 1: DEVICE FINGERPRINT FUNCTIONS
+# ============================================================
 def get_device_fingerprint():
     """Get device fingerprint from query params (set by Android app or JavaScript)"""
     query_params = st.query_params
@@ -89,9 +87,9 @@ def get_device_id():
         return f"DEV-{fp[:8].upper()}-{fp[-8:].upper()}"
     return "DEV-UNKNOWN"
 
-# ------------------------------
-# EXCEL DATA LOADER
-# ------------------------------
+# ============================================================
+# SECTION 2: EXCEL DATA LOADER AND HELPERS
+# ============================================================
 @st.cache_data
 def load_excel_data(file_path):
     try:
@@ -136,6 +134,9 @@ def safe_str(val):
         return ""
     return str(val).strip()
 
+# ============================================================
+# SECTION 3: TIME FUNCTIONS
+# ============================================================
 def get_online_time():
     """Get current UTC time from online API"""
     try:
@@ -160,6 +161,9 @@ def get_online_time():
     except:
         return None
 
+# ============================================================
+# SECTION 4: TOKEN GENERATION AND VALIDATION
+# ============================================================
 def generate_secure_token(site_plaid, user_email, user_name, device_identifiers=""):
     """
     Generate token with embedded MAC addresses, IMEI, and Android IDs.
@@ -291,9 +295,9 @@ def validate_token(token, df, device_fingerprint=None):
     except Exception as e:
         return None, f"Validation error: {str(e)}"
 
-# ------------------------------
-# JAVASCRIPT FOR DEVICE FINGERPRINT (For web testing)
-# ------------------------------
+# ============================================================
+# SECTION 5: JAVASCRIPT INJECTIONS
+# ============================================================
 def inject_device_fingerprint_script():
     """Capture device fingerprint from browser (for web testing)"""
     fingerprint_js = """
@@ -333,412 +337,16 @@ def inject_device_fingerprint_script():
     """
     components.html(fingerprint_js, height=0)
 
-# ------------------------------
-# DARK THEME CSS
-# ------------------------------
-st.markdown("""
-    <style>
-    .main .block-container {
-        padding: 0.5rem 0.8rem 5rem 0.8rem;
-        background: #0a0a0f;
-        max-width: 100% !important;
-    }
-    .stApp { background: #0a0a0f; }
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .stTextInput label, .stSelectbox label, .stCheckbox label {
-        color: #e8e8f0 !important;
-        font-weight: 500 !important;
-    }
-    .stTextInput input, .stSelectbox select {
-        color: #e8e8f0 !important;
-        background: #1a1a2e !important;
-        border: 1px solid #2a2a44 !important;
-        border-radius: 8px !important;
-    }
-    .stTextInput input:focus {
-        border-color: #4f8cf7 !important;
-        box-shadow: 0 0 0 2px rgba(79, 140, 247, 0.2) !important;
-    }
-    .stButton button {
-        color: #e8e8f0 !important;
-        font-weight: 600 !important;
-    }
-    .app-header {
-        background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%);
-        padding: 0.8rem 1rem;
-        margin: -0.5rem -0.8rem 1rem -0.8rem;
-        border-bottom: 1px solid #2a2a44;
-        position: sticky;
-        top: 0;
-        z-index: 999;
-        backdrop-filter: blur(10px);
-    }
-    .app-header-content {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        max-width: 1200px;
-        margin: 0 auto;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .app-logo { display: flex; align-items: center; gap: 0.5rem; }
-    .app-logo-icon { font-size: 1.5rem; }
-    .app-logo-text { 
-        font-size: 1.1rem; 
-        font-weight: 700; 
-        color: #e8e8f0;
-        text-shadow: 0 0 10px rgba(79, 140, 247, 0.3);
-    }
-    .app-logo-badge {
-        background: rgba(79, 140, 247, 0.2);
-        color: #4f8cf7;
-        padding: 0.15rem 0.6rem;
-        border-radius: 40px;
-        font-size: 0.6rem;
-        font-weight: 500;
-        border: 1px solid rgba(79, 140, 247, 0.2);
-        margin-left: 0.3rem;
-    }
-    .secure-card {
-        background: #1a1a2e;
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        border: 1px solid #2a2a44;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    }
-    .secure-card h2 { color: #e8e8f0; margin-bottom: 0.5rem; font-weight: 700; }
-    .secure-card p { color: #c0c0d0; font-size: 0.95rem; line-height: 1.6; }
-    .secure-card .sub-text { color: #8a8aa0; font-size: 0.85rem; }
-    .site-card {
-        background: #1a1a2e;
-        border-radius: 16px;
-        padding: 1.2rem;
-        margin-bottom: 0.8rem;
-        border: 1px solid #2a2a44;
-        animation: fadeIn 0.4s ease-out;
-        transition: all 0.3s;
-    }
-    .site-card:hover { border-color: #4f8cf7; box-shadow: 0 0 20px rgba(79, 140, 247, 0.05); }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-    .site-name { font-size: 1.1rem; font-weight: 600; color: #e8e8f0; }
-    .site-plaid {
-        background: rgba(139, 92, 246, 0.25);
-        color: #a78bfa;
-        padding: 0.15rem 0.6rem;
-        border-radius: 40px;
-        font-size: 0.65rem;
-        font-weight: 600;
-        border: 1px solid rgba(139, 92, 246, 0.2);
-        display: inline-block;
-        margin-left: 0.3rem;
-    }
-    .site-location { font-size: 0.85rem; color: #b0b0c8; margin-bottom: 0.5rem; }
-    .detail-item { display: flex; flex-direction: column; gap: 0.05rem; }
-    .detail-label {
-        color: #7a7a95;
-        font-size: 0.6rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-    }
-    .detail-value { color: #d0d0e0; font-weight: 500; font-size: 0.85rem; }
-    .detail-value.fo-name { color: #60a5fa; font-weight: 600; }
-    .detail-value.highlight { color: #fbbf24; font-weight: 600; }
-    .detail-value.missing { color: #f87171; font-style: italic; }
-    .btn {
-        padding: 0.5rem 1.2rem;
-        border-radius: 40px;
-        border: none;
-        font-weight: 600;
-        font-size: 0.8rem;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        color: white;
-    }
-    .btn-primary { background: #4f8cf7; }
-    .btn-primary:hover { background: #3a7bd5; transform: scale(1.02); box-shadow: 0 4px 15px rgba(79, 140, 247, 0.3); }
-    .btn-success { background: #34d399; color: #0a0a0f; }
-    .btn-success:hover { background: #2bb386; transform: scale(1.02); }
-    .btn-danger { background: #ef4444; }
-    .btn-danger:hover { background: #dc2626; transform: scale(1.02); }
-    .btn-outline { background: transparent; border: 1px solid #2a2a44; color: #b0b0c8; }
-    .btn-outline:hover { background: #1a1a2e; border-color: #4f8cf7; color: #e8e8f0; }
-    .btn-purple { background: #8b5cf6; }
-    .btn-purple:hover { background: #7c3aed; transform: scale(1.02); }
-    .token-box {
-        background: #0d0d1a;
-        border-radius: 8px;
-        padding: 0.8rem;
-        border: 1px solid #2a2a44;
-        font-family: 'Courier New', monospace;
-        color: #fbbf24;
-        word-break: break-all;
-        font-size: 0.8rem;
-        margin: 0.5rem 0;
-    }
-    .token-box .label { color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; }
-    .token-box code { color: #fbbf24; font-size: 0.75rem; }
-    .site-details-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.5rem 1.5rem;
-        margin: 0.5rem 0;
-        font-size: 0.85rem;
-    }
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 0.6rem;
-        margin: 0.5rem 0 1rem 0;
-    }
-    .stat-card {
-        background: #14141e;
-        border-radius: 12px;
-        padding: 0.8rem;
-        border: 1px solid #2a2a44;
-        text-align: center;
-    }
-    .stat-number { font-size: 1.6rem; font-weight: 700; color: #e8e8f0; display: block; }
-    .stat-label { font-size: 0.7rem; color: #8a8aa0; display: block; margin-top: 0.15rem; }
-    .time-status {
-        background: #14141e;
-        border-radius: 8px;
-        padding: 0.4rem 0.8rem;
-        border: 1px solid #2a2a44;
-        font-size: 0.7rem;
-        color: #8a8aa0;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .time-status .online { color: #34d399; }
-    .time-status .offline { color: #f87171; }
-    .tag {
-        padding: 0.15rem 0.6rem;
-        border-radius: 40px;
-        font-size: 0.6rem;
-        font-weight: 500;
-        border: 1px solid transparent;
-        display: inline-block;
-    }
-    .tag-territory { background: rgba(52, 211, 153, 0.15); color: #34d399; border-color: rgba(52, 211, 153, 0.2); }
-    .tag-towerco { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border-color: rgba(251, 191, 36, 0.2); }
-    .bottom-nav {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: #14141e;
-        border-top: 1px solid #2a2a44;
-        display: flex;
-        justify-content: space-around;
-        padding: 0.4rem 0.5rem;
-        z-index: 1000;
-        backdrop-filter: blur(10px);
-    }
-    .nav-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.1rem;
-        padding: 0.3rem 0.8rem;
-        border-radius: 12px;
-        background: transparent;
-        border: none;
-        color: #6b6b85;
-        font-size: 0.55rem;
-        font-weight: 500;
-        cursor: pointer;
-    }
-    .nav-item .nav-icon { font-size: 1.2rem; }
-    .nav-item.active { color: #4f8cf7; }
-    .batch-result {
-        background: #14141e;
-        border-radius: 12px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border: 1px solid #2a2a44;
-    }
-    .batch-result.success { border-color: #34d399; }
-    .batch-result.error { border-color: #ef4444; }
-    .batch-result .site-item {
-        padding: 0.3rem 0;
-        border-bottom: 1px solid #1a1a2e;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .batch-result .site-item:last-child { border-bottom: none; }
-    
-    .batch-link-item {
-        background: #1a1a2e;
-        border-radius: 8px;
-        padding: 0.5rem 0.8rem;
-        margin: 0.2rem 0;
-        border: 1px solid #2a2a44;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .batch-link-item .link-number {
-        color: #4f8cf7;
-        font-weight: 600;
-        font-size: 0.8rem;
-    }
-    .batch-link-item .link-code {
-        color: #fbbf24;
-        font-family: monospace;
-        font-size: 0.7rem;
-        word-break: break-all;
-        flex: 1;
-    }
-    .batch-link-item .copy-btn {
-        background: #2a2a44;
-        color: #a0a0b8;
-        border: none;
-        border-radius: 4px;
-        padding: 0.2rem 0.6rem;
-        font-size: 0.65rem;
-        cursor: pointer;
-    }
-    .batch-link-item .copy-btn:hover {
-        background: #3a3a5e;
-        color: #e8e8f0;
-    }
-
-    .device-info {
-        background: #14141e;
-        border-radius: 12px;
-        padding: 0.8rem;
-        border: 1px solid #34d399;
-        margin: 0.5rem 0;
-    }
-    .device-info .label {
-        color: #34d399;
-        font-size: 0.6rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .device-info .value {
-        color: #d0d0e0;
-        font-family: monospace;
-        font-size: 0.85rem;
-    }
-    .device-info .sub {
-        color: #8a8aa0;
-        font-size: 0.7rem;
-    }
-
-    /* Admin Login Page - Full Page */
-    .admin-login-page {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 80vh;
-        padding: 2rem;
-    }
-    .admin-login-card {
-        background: #1a1a2e;
-        border-radius: 16px;
-        padding: 2.5rem;
-        max-width: 420px;
-        width: 100%;
-        border: 1px solid #2a2a44;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.5);
-    }
-    .admin-login-card h2 {
-        color: #e8e8f0;
-        text-align: center;
-        margin-bottom: 0.5rem;
-        font-size: 1.5rem;
-    }
-    .admin-login-card .subtitle {
-        color: #8a8aa0;
-        text-align: center;
-        margin-bottom: 1.5rem;
-        font-size: 0.9rem;
-    }
-    .admin-login-card input {
-        width: 100%;
-        padding: 0.8rem 1rem;
-        background: #1e1e32;
-        border: 1px solid #2a2a44;
-        border-radius: 8px;
-        color: #e8e8f0;
-        font-size: 1rem;
-        margin-bottom: 1rem;
-    }
-    .admin-login-card input:focus {
-        border-color: #4f8cf7;
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(79, 140, 247, 0.15);
-    }
-    .admin-login-card .login-btn {
-        width: 100%;
-        padding: 0.8rem;
-        background: #4f8cf7;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-    }
-    .admin-login-card .login-btn:hover {
-        background: #3a7bd5;
-    }
-    .admin-login-card .error {
-        color: #f87171;
-        text-align: center;
-        margin-top: 0.5rem;
-        font-size: 0.85rem;
-    }
-
-    @media (min-width: 769px) {
-        .main .block-container { padding: 1rem 2rem 6rem 2rem; max-width: 1200px !important; margin: 0 auto; }
-        .site-details-grid { grid-template-columns: repeat(3, 1fr); }
-        .stats-grid { grid-template-columns: repeat(4, 1fr); }
-        .bottom-nav { display: none; }
-        .site-card { padding: 1.5rem; }
-    }
-    @media (max-width: 640px) {
-        .site-details-grid { grid-template-columns: 1fr 1fr; }
-        .app-header-content { flex-direction: column; align-items: stretch; }
-        .secure-card { padding: 1rem; }
-        .batch-link-item { flex-direction: column; align-items: stretch; }
-        .admin-login-card { padding: 1.5rem; }
-    }
-    @media (max-width: 380px) {
-        .site-details-grid { grid-template-columns: 1fr; }
-        .site-name { font-size: 0.95rem; }
-        .admin-login-card { padding: 1rem; }
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# ------------------------------
-# ADMIN AUTHENTICATION
-# ------------------------------
+# ============================================================
+# SECTION 6: ADMIN AUTHENTICATION
+# ============================================================
 def show_admin_login():
-    """Show admin login as a centered card (full page)"""
-    st.markdown('<div class="admin-login-page">', unsafe_allow_html=True)
-    st.markdown('<div class="admin-login-card">', unsafe_allow_html=True)
-    
+    """Show admin login as a centered card"""
     st.markdown("""
-    <h2>🔒 Admin Access</h2>
-    <p class="subtitle">Enter the admin password to access the dashboard</p>
+    <div style="display: flex; justify-content: center; align-items: center; min-height: 70vh; padding: 2rem;">
+        <div style="background: #1a1a2e; border-radius: 16px; padding: 2.5rem; max-width: 420px; width: 100%; border: 1px solid #2a2a44; box-shadow: 0 8px 30px rgba(0,0,0,0.5);">
+            <h2 style="color: #e8e8f0; text-align: center; margin-bottom: 0.5rem; font-size: 1.5rem;">🔒 Admin Access</h2>
+            <p style="color: #8a8aa0; text-align: center; margin-bottom: 1.5rem; font-size: 0.9rem;">Enter the admin password to access the dashboard</p>
     """, unsafe_allow_html=True)
     
     with st.form("admin_login_form", clear_on_submit=False):
@@ -755,18 +363,16 @@ def show_admin_login():
                 st.session_state.admin_authenticated = True
                 st.rerun()
             else:
-                st.markdown('<div class="error">❌ Invalid password. Please try again.</div>', unsafe_allow_html=True)
+                st.error("❌ Invalid password. Please try again.")
     
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("""
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-def check_admin_auth():
-    """Check if admin is authenticated"""
-    return st.session_state.admin_authenticated
-
-# ------------------------------
-# APP HEADER
-# ------------------------------
+# ============================================================
+# SECTION 7: UI COMPONENTS
+# ============================================================
 def app_header():
     online_time = get_online_time()
     time_status = "✅ Online" if online_time else "⚠️ Offline (system time)"
@@ -775,36 +381,126 @@ def app_header():
     device_id = get_device_id()
     
     st.markdown(f"""
-    <div class="app-header">
-        <div class="app-header-content">
-            <div class="app-logo">
-                <span class="app-logo-icon">🔒</span>
-                <span class="app-logo-text">GPS Extractor</span>
-                <span class="app-logo-badge">Secure Access</span>
+    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%); padding: 0.8rem 1rem; margin: -0.5rem -0.8rem 1rem -0.8rem; border-bottom: 1px solid #2a2a44; position: sticky; top: 0; z-index: 999; backdrop-filter: blur(10px);">
+        <div style="display: flex; align-items: center; justify-content: space-between; max-width: 1200px; margin: 0 auto; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.5rem;">🔒</span>
+                <span style="font-size: 1.1rem; font-weight: 700; color: #e8e8f0; text-shadow: 0 0 10px rgba(79, 140, 247, 0.3);">GPS Extractor</span>
+                <span style="background: rgba(79, 140, 247, 0.2); color: #4f8cf7; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.6rem; font-weight: 500; border: 1px solid rgba(79, 140, 247, 0.2); margin-left: 0.3rem;">Secure Access</span>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                <span class="time-status">
+                <span style="background: #14141e; border-radius: 8px; padding: 0.3rem 0.8rem; border: 1px solid #2a2a44; font-size: 0.7rem; color: #8a8aa0; display: inline-flex; align-items: center; gap: 0.5rem;">
                     🕐 <span class="{time_class}">{time_status}</span>
                 </span>
-                <span class="time-status" style="font-size:0.6rem; border-color: #34d399;">
+                <span style="background: #14141e; border-radius: 8px; padding: 0.3rem 0.8rem; border: 1px solid #34d399; font-size: 0.6rem; color: #8a8aa0; display: inline-flex; align-items: center; gap: 0.5rem;">
                     📱 <span style="color:#34d399;">{device_id}</span>
                 </span>
-                <button class="btn btn-outline" onclick="location.href='/'">🏠 Home</button>
-                <button class="btn btn-outline" onclick="location.href='?page=admin'">⚙️ Admin</button>
+                <button onclick="location.href='/'" style="background: transparent; border: 1px solid #2a2a44; color: #b0b0c8; padding: 0.4rem 0.8rem; border-radius: 40px; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.2s;">🏠 Home</button>
+                <button onclick="location.href='?page=admin'" style="background: transparent; border: 1px solid #2a2a44; color: #b0b0c8; padding: 0.4rem 0.8rem; border-radius: 40px; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.2s;">⚙️ Admin</button>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# ------------------------------
-# ADMIN PAGE
-# ------------------------------
-def show_admin():
-    # Check admin authentication
-    if not check_admin_auth():
-        show_admin_login()
-        return
+def secure_card(title, content):
+    st.markdown(f"""
+    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #2a2a44; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        <h2 style="color: #e8e8f0; margin-bottom: 0.5rem; font-weight: 700;">{title}</h2>
+        <p style="color: #c0c0d0; font-size: 0.95rem; line-height: 1.6;">{content}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+def site_card(site_data, search_term=""):
+    """Display a single site card"""
+    site_name = safe_str(site_data.get('SITE', ''))
+    plaid = safe_str(site_data.get('PLAID', ''))
+    region = safe_str(site_data.get('REGION', ''))
+    province = safe_str(site_data.get('PROVINCE', ''))
+    municipality = safe_str(site_data.get('MUNICIPALITY', ''))
+    barangay = safe_str(site_data.get('BARANGAY', ''))
+    territory = safe_str(site_data.get('TERRITORY', ''))
+    lat = safe_str(site_data.get('LATITUDE', ''))
+    lon = safe_str(site_data.get('LONGITUDE', ''))
+    site_add = safe_str(site_data.get('SITE_ADD', ''))
+    assign_hub = safe_str(site_data.get('ASSIGN_HUB', ''))
+    towerco = safe_str(site_data.get('TOWERCO', ''))
     
+    fo_onsite = safe_str(site_data.get('NEW ENGINEER_ANM1', ''))
+    if not fo_onsite:
+        fo_onsite = safe_str(site_data.get('NEW  ENGINEER_ANM1', ''))
+    contact = safe_str(site_data.get('CONTACT NUMBER', ''))
+    
+    fo_display = fo_onsite if fo_onsite else "No FO assigned"
+    fo_class = "fo-name" if fo_onsite else "missing"
+    
+    # Highlight search terms
+    if search_term:
+        site_name = site_name.replace(search_term, f'<span style="background: #fbbf24; color: #0a0a0f; padding: 0.05rem 0.2rem; border-radius: 3px; font-weight: 600;">{search_term}</span>')
+    
+    st.markdown(f"""
+    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.2rem; margin-bottom: 0.8rem; border: 1px solid #2a2a44; transition: all 0.3s; animation: fadeIn 0.4s ease-out;">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <div>
+                <span style="font-size: 1.1rem; font-weight: 600; color: #e8e8f0;">{site_name}</span>
+                <span style="background: rgba(139, 92, 246, 0.25); color: #a78bfa; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.65rem; font-weight: 600; border: 1px solid rgba(139, 92, 246, 0.2); display: inline-block; margin-left: 0.3rem;">{plaid}</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <span style="background: rgba(52, 211, 153, 0.15); color: #34d399; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.6rem; font-weight: 500; border: 1px solid rgba(52, 211, 153, 0.2);">Territory {territory}</span>
+                <span style="background: rgba(251, 191, 36, 0.15); color: #fbbf24; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.6rem; font-weight: 500; border: 1px solid rgba(251, 191, 36, 0.2);">{towerco}</span>
+            </div>
+        </div>
+        <div style="font-size: 0.85rem; color: #b0b0c8; margin-bottom: 0.5rem;">{region} · {province} · {municipality} · {barangay}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1rem; margin: 0.5rem 0; font-size: 0.8rem;">
+            <div style="display: flex; flex-direction: column; gap: 0.05rem;">
+                <span style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Address</span>
+                <span style="color: #d0d0e0; font-weight: 500; font-size: 0.85rem;">{site_add}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.05rem;">
+                <span style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">📋 ASSIGN HUB</span>
+                <span style="color: #d0d0e0; font-weight: 500; font-size: 0.85rem;">{assign_hub if assign_hub else "No assigned"}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.05rem;">
+                <span style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">👤 FO ONSITE</span>
+                <span style="color: #60a5fa; font-weight: 600; font-size: 0.85rem;">{fo_display}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.05rem;">
+                <span style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">📞 FO NUMBER</span>
+                <span style="color: #d0d0e0; font-weight: 500; font-size: 0.85rem;">{contact if contact else "No contact"}</span>
+            </div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.7rem;">
+    """, unsafe_allow_html=True)
+    
+    # Map button
+    if lat and lon:
+        try:
+            float(lat); float(lon)
+            maps_url = f"https://www.google.com/maps?q={lat},{lon}"
+            st.markdown(f'<a href="{maps_url}" target="_blank" style="background: #4f8cf7; color: white; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;">🗺️ Navigate</a>', unsafe_allow_html=True)
+        except:
+            st.markdown('<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">⚠️ Invalid</span>', unsafe_allow_html=True)
+    else:
+        st.markdown('<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">⚠️ No coords</span>', unsafe_allow_html=True)
+    
+    # Call button
+    if contact:
+        clean_contact = ''.join(ch for ch in contact if ch.isdigit() or ch == '+')
+        if clean_contact:
+            st.markdown(f'<a href="tel:{clean_contact}" style="background: #34d399; color: #0a0a0f; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;">📞 Call FO</a>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">📞 {contact}</span>', unsafe_allow_html=True)
+    else:
+        st.markdown('<span style="background: #2a2a44; color: #6b6b85; padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">📞 No contact</span>', unsafe_allow_html=True)
+    
+    st.markdown("""
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ============================================================
+# SECTION 8: ADMIN DASHBOARD
+# ============================================================
+def show_admin_dashboard():
     app_header()
     
     df = load_excel_data("database.xlsx")
@@ -829,10 +525,12 @@ def show_admin():
     st.session_state.df = df
     
     st.markdown("""
-    <div class="secure-card">
-        <h2>⚙️ Admin Dashboard</h2>
-        <p>Generate secure links with <strong style="color: #34d399;">MAC Address / IMEI / Android ID</strong> verification.</p>
-        <p class="sub-text">
+    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #2a2a44; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        <h2 style="color: #e8e8f0; margin-bottom: 0.5rem; font-weight: 700;">⚙️ Admin Dashboard</h2>
+        <p style="color: #c0c0d0; font-size: 0.95rem; line-height: 1.6;">
+            Generate secure links with <strong style="color: #34d399;">MAC Address / IMEI / Android ID</strong> verification.
+        </p>
+        <p style="color: #8a8aa0; font-size: 0.85rem;">
             🔍 Search by PLAID or Site Name · Batch generate links<br>
             📱 Device is verified by <strong style="color: #fbbf24;">MAC Address, IMEI, or Android ID</strong> - No user input required!
         </p>
@@ -841,10 +539,10 @@ def show_admin():
     
     device_id = get_device_id()
     st.markdown(f"""
-    <div class="device-info">
-        <div class="label">📱 Your Device ID (For Testing)</div>
-        <div class="value">{device_id}</div>
-        <div class="sub">For Android app, use actual MAC Address, IMEI, or Android ID</div>
+    <div style="background: #14141e; border-radius: 12px; padding: 0.8rem; border: 1px solid #34d399; margin: 0.5rem 0;">
+        <div style="color: #34d399; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">📱 Your Device ID (For Testing)</div>
+        <div style="color: #d0d0e0; font-family: monospace; font-size: 0.85rem;">{device_id}</div>
+        <div style="color: #8a8aa0; font-size: 0.7rem;">For Android app, use actual MAC Address, IMEI, or Android ID</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -872,13 +570,13 @@ def show_admin():
             if site_data:
                 found = True
                 st.success(f"✅ Found site: {site_data.get('SITE', '')}")
-                display_site_card(site_data)
+                site_card(site_data)
             else:
                 site_data = get_site_by_name(df, search_term)
                 if site_data:
                     found = True
                     st.success(f"✅ Found site: {site_data.get('SITE', '')}")
-                    display_site_card(site_data)
+                    site_card(site_data)
             
             if not found:
                 st.warning(f"⚠️ No site found matching: '{search_term}'")
@@ -922,15 +620,13 @@ def show_admin():
                 user_name = st.text_input("User Name", placeholder="John Doe", key="single_name")
             
             st.markdown("""
-            <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border-color: #34d399;">
-                <p style="color: #34d399; font-weight: 600; margin: 0;">
-                    📱 <strong>MAC Address / IMEI / Android ID Verification</strong>
-                </p>
+            <div style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border: 1px solid #34d399; border-radius: 12px;">
+                <p style="color: #34d399; font-weight: 600; margin: 0;">📱 <strong>MAC Address / IMEI / Android ID Verification</strong></p>
                 <p style="color: #8a8aa0; font-size: 0.8rem; margin: 0.3rem 0 0 0;">
                     Enter the user's actual device identifiers:<br>
                     <span style="color: #34d399;">MAC Address</span>: <code>AA:BB:CC:DD:EE:FF</code><br>
                     <span style="color: #fbbf24;">IMEI</span>: <code>123456789012345</code> (15 digits)<br>
-                    <span style="color: #60a5fa;">Android ID</span>: <code>ANDROID:abc123def456</code> (Android ID from device)
+                    <span style="color: #60a5fa;">Android ID</span>: <code>ANDROID:abc123def456</code>
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -969,15 +665,15 @@ def show_admin():
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"""
-                        <div class="token-box">
-                            <div class="label">🔗 Secure Link</div>
+                        <div style="background: #0d0d1a; border-radius: 8px; padding: 0.8rem; border: 1px solid #2a2a44; font-family: 'Courier New', monospace; color: #fbbf24; word-break: break-all; font-size: 0.8rem; margin: 0.5rem 0;">
+                            <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">🔗 Secure Link</div>
                             <code style="word-break: break-all; font-size: 0.7rem;">{link}</code>
                         </div>
                         """, unsafe_allow_html=True)
                     with col2:
                         st.markdown(f"""
-                        <div class="token-box">
-                            <div class="label">📋 Token Info</div>
+                        <div style="background: #0d0d1a; border-radius: 8px; padding: 0.8rem; border: 1px solid #2a2a44; font-family: 'Courier New', monospace; color: #fbbf24; word-break: break-all; font-size: 0.8rem; margin: 0.5rem 0;">
+                            <div style="color: #7a7a95; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">📋 Token Info</div>
                             <div style="color: #d0d0e0;">👤 User: {user_name}</div>
                             <div style="color: #d0d0e0;">📧 Email: {user_email}</div>
                             <div style="color: #d0d0e0;">⏰ Expires: {expiry.strftime('%B %d, %Y at %I:%M %p UTC')}</div>
@@ -997,11 +693,8 @@ def show_admin():
         st.subheader("📦 Batch Generate Links")
         
         st.markdown("""
-        <div class="secure-card" style="background: #14141e; padding: 1rem;">
-            <p style="color: #b0b0c8; font-size: 0.9rem;">
-                Enter multiple PLAIDs or Site Names separated by commas.<br>
-                Example: <code>MIN881, MIN806, Site Alpha</code>
-            </p>
+        <div style="background: #14141e; padding: 1rem; border: 1px solid #2a2a44; border-radius: 12px; margin: 0.5rem 0;">
+            <p style="color: #b0b0c8; font-size: 0.9rem;">Enter multiple PLAIDs or Site Names separated by commas.<br>Example: <code>MIN881, MIN806, Site Alpha</code></p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1019,7 +712,7 @@ def show_admin():
             batch_name = st.text_input("User Name", placeholder="John Doe", key="batch_name")
         
         st.markdown("""
-        <div class="secure-card" style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border-color: #34d399;">
+        <div style="background: #14141e; padding: 0.8rem; margin: 0.5rem 0; border: 1px solid #34d399; border-radius: 12px;">
             <p style="color: #34d399; font-size: 0.8rem; margin: 0;">
                 📱 Device identifiers that will apply to ALL generated links:<br>
                 <span style="color: #34d399;">MAC Address</span>: <code>AA:BB:CC:DD:EE:FF</code><br>
@@ -1125,14 +818,13 @@ def show_admin():
                     st.markdown("Click the copy button to copy each link individually.")
                     
                     for link_info in generated_links:
-                        link_html = f"""
-                        <div class="batch-link-item">
-                            <span class="link-number">#{link_info['number']}</span>
-                            <span class="link-code">{link_info['link']}</span>
-                            <button class="copy-btn" onclick="navigator.clipboard.writeText('{link_info['link']}')">📋 Copy</button>
+                        st.markdown(f"""
+                        <div style="background: #1a1a2e; border-radius: 8px; padding: 0.5rem 0.8rem; margin: 0.2rem 0; border: 1px solid #2a2a44; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="color: #4f8cf7; font-weight: 600; font-size: 0.8rem;">#{link_info['number']}</span>
+                            <span style="color: #fbbf24; font-family: monospace; font-size: 0.7rem; word-break: break-all; flex: 1;">{link_info['link']}</span>
+                            <button onclick="navigator.clipboard.writeText('{link_info['link']}')" style="background: #2a2a44; color: #a0a0b8; border: none; border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.65rem; cursor: pointer;">📋 Copy</button>
                         </div>
-                        """
-                        st.markdown(link_html, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
                     
                     # Also show detailed results
                     st.markdown("---")
@@ -1141,8 +833,8 @@ def show_admin():
                     for result in results:
                         if result['status'] == 'success':
                             st.markdown(f"""
-                            <div class="batch-result success">
-                                <div class="site-item">
+                            <div style="background: #14141e; border-radius: 12px; padding: 1rem; margin: 0.5rem 0; border: 1px solid #34d399;">
+                                <div style="padding: 0.3rem 0; border-bottom: 1px solid #1a1a2e; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                                     <div>
                                         <strong style="color: #e8e8f0;">{result['site']}</strong>
                                         <span style="color: #8a8aa0; font-size: 0.8rem; margin-left: 0.5rem;">{result['plaid']}</span>
@@ -1156,8 +848,8 @@ def show_admin():
                             """, unsafe_allow_html=True)
                         else:
                             st.markdown(f"""
-                            <div class="batch-result error">
-                                <div class="site-item">
+                            <div style="background: #14141e; border-radius: 12px; padding: 1rem; margin: 0.5rem 0; border: 1px solid #ef4444;">
+                                <div style="padding: 0.3rem 0; border-bottom: 1px solid #1a1a2e; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                                     <div>
                                         <strong style="color: #f87171;">{result['input']}</strong>
                                     </div>
@@ -1193,7 +885,6 @@ def show_admin():
                                 use_container_width=True
                             )
                             
-                            # Also provide a text export
                             text_export = "\n".join([f"{r['Site']}: {r['Link']}" for r in export_data])
                             st.download_button(
                                 "⬇️ Download Links as Text",
@@ -1203,72 +894,11 @@ def show_admin():
                                 use_container_width=True
                             )
 
-def display_site_card(site_data):
-    """Display site information in a formatted card"""
-    site_name = safe_str(site_data.get('SITE', ''))
-    plaid = safe_str(site_data.get('PLAID', ''))
-    region = safe_str(site_data.get('REGION', ''))
-    province = safe_str(site_data.get('PROVINCE', ''))
-    municipality = safe_str(site_data.get('MUNICIPALITY', ''))
-    barangay = safe_str(site_data.get('BARANGAY', ''))
-    territory = safe_str(site_data.get('TERRITORY', ''))
-    lat = safe_str(site_data.get('LATITUDE', ''))
-    lon = safe_str(site_data.get('LONGITUDE', ''))
-    site_add = safe_str(site_data.get('SITE_ADD', ''))
-    assign_hub = safe_str(site_data.get('ASSIGN_HUB', ''))
-    towerco = safe_str(site_data.get('TOWERCO', ''))
-    
-    fo_onsite = safe_str(site_data.get('NEW ENGINEER_ANM1', ''))
-    if not fo_onsite:
-        fo_onsite = safe_str(site_data.get('NEW  ENGINEER_ANM1', ''))
-    contact = safe_str(site_data.get('CONTACT NUMBER', ''))
-    
-    fo_display = fo_onsite if fo_onsite else "No FO assigned"
-    fo_class = "fo-name" if fo_onsite else "missing"
-    
-    st.markdown(f"""
-    <div class="site-card">
-        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; align-items: flex-start;">
-            <div>
-                <span class="site-name">{site_name}</span>
-                <span class="site-plaid">{plaid}</span>
-            </div>
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <span class="tag tag-territory">Territory {territory}</span>
-                <span class="tag tag-towerco">{towerco}</span>
-            </div>
-        </div>
-        <div class="site-location">{region} · {province} · {municipality} · {barangay}</div>
-        <div class="site-details-grid">
-            <div class="detail-item">
-                <span class="detail-label">Address</span>
-                <span class="detail-value">{site_add}</span>
-            </div>
-            <div class="detail-item">
-                <span class="detail-label">📋 ASSIGN HUB</span>
-                <span class="detail-value">{assign_hub if assign_hub else "No assigned"}</span>
-            </div>
-            <div class="detail-item">
-                <span class="detail-label">👤 FO ONSITE</span>
-                <span class="detail-value {fo_class}">{fo_display}</span>
-            </div>
-            <div class="detail-item">
-                <span class="detail-label">📞 FO NUMBER</span>
-                <span class="detail-value">{contact if contact else "No contact"}</span>
-            </div>
-        </div>
-        <div style="margin-top: 0.5rem;">
-            <button class="btn btn-primary" onclick="location.href='?page=admin&generate={plaid}'">🔗 Generate Link</button>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ------------------------------
-# SITE VIEWER PAGE
-# ------------------------------
+# ============================================================
+# SECTION 9: SITE VIEWER
+# ============================================================
 def show_site_viewer(token):
     inject_device_fingerprint_script()
-    
     app_header()
     
     device_fp = get_device_fingerprint()
@@ -1287,9 +917,9 @@ def show_site_viewer(token):
     
     if df is None or df.empty:
         st.markdown("""
-        <div class="secure-card" style="border-color: #f59e0b;">
+        <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #f59e0b; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
             <h2 style="color: #f59e0b;">⚠️ Data Not Available</h2>
-            <p>The site data is not available. Please contact the administrator.</p>
+            <p style="color: #c0c0d0;">The site data is not available. Please contact the administrator.</p>
         </div>
         """, unsafe_allow_html=True)
         return
@@ -1305,207 +935,79 @@ def show_site_viewer(token):
     
     if error:
         st.markdown(f"""
-        <div class="secure-card" style="border-color: #ef4444;">
+        <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #ef4444; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
             <h2 style="color: #ef4444;">🔒 Access Denied</h2>
             <p style="color: #d0d0e0;">{error}</p>
-            <p style="color: #8a8aa0; font-size: 0.85rem;">
-                Your device could not be verified. Please ensure your device is registered.
-            </p>
+            <p style="color: #8a8aa0; font-size: 0.85rem;">Your device could not be verified. Please ensure your device is registered.</p>
             <div style="background: #1a1a2e; border-radius: 8px; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #2a2a44;">
                 <div style="color: #34d399; font-size: 0.7rem;">Your Device ID: <code style="color: #60a5fa;">{get_device_id()}</code></div>
                 <div style="color: #8a8aa0; font-size: 0.6rem;">Contact the administrator to register this device</div>
             </div>
             <br>
-            <button class="btn btn-primary" onclick="location.href='/'">🏠 Return to Home</button>
+            <button onclick="location.href='/'" style="background: #4f8cf7; color: white; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer;">🏠 Return to Home</button>
         </div>
         """, unsafe_allow_html=True)
         return
     
     if not site_data:
         st.markdown("""
-        <div class="secure-card" style="border-color: #f59e0b;">
+        <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #f59e0b; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
             <h2 style="color: #f59e0b;">⚠️ Site Not Found</h2>
-            <p>The requested site could not be found in the database.</p>
-            <button class="btn btn-primary" onclick="location.href='/'">🏠 Return to Home</button>
+            <p style="color: #c0c0d0;">The requested site could not be found in the database.</p>
+            <button onclick="location.href='/'" style="background: #4f8cf7; color: white; padding: 0.5rem 1.2rem; border-radius: 40px; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer;">🏠 Return to Home</button>
         </div>
         """, unsafe_allow_html=True)
         return
     
-    display_site_content(site_data)
-
-def display_site_content(site_data):
-    """Display site content after successful validation"""
-    
+    # Display site content
     online_time = get_online_time()
-    if online_time:
-        time_source = "🔒 Time verified: Online (UTC)"
-    else:
-        time_source = "⚠️ Time source: System (offline - contact admin)"
+    time_source = "🔒 Time verified: Online (UTC)" if online_time else "⚠️ Time source: System (offline - contact admin)"
     
     device_status = "✅ Device Verified" if site_data.get('_device_restricted', False) else "ℹ️ No device restriction"
     device_count = site_data.get('_device_count', 0)
     
-    raw_devices = site_data.get('_raw_devices', '')
-    
     st.markdown(f"""
-    <div class="secure-card" style="border-color: #34d399;">
+    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #34d399; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
             <div>
                 <h2 style="color: #e8e8f0; margin: 0;">{site_data.get('SITE', 'Unknown Site')}</h2>
-                <span class="site-plaid">{site_data.get('PLAID', 'No ID')}</span>
+                <span style="background: rgba(139, 92, 246, 0.25); color: #a78bfa; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.65rem; font-weight: 600; border: 1px solid rgba(139, 92, 246, 0.2); display: inline-block;">{site_data.get('PLAID', 'No ID')}</span>
             </div>
             <div style="text-align: right;">
-                <span style="background: rgba(52, 211, 153, 0.2); color: #34d399; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.65rem; border: 1px solid rgba(52, 211, 153, 0.2);">
-                    🔒 Secure Access
-                </span>
+                <span style="background: rgba(52, 211, 153, 0.2); color: #34d399; padding: 0.15rem 0.6rem; border-radius: 40px; font-size: 0.65rem; border: 1px solid rgba(52, 211, 153, 0.2);">🔒 Secure Access</span>
                 <br>
-                <span style="color: #8a8aa0; font-size: 0.7rem;">
-                    {time_source}
-                </span>
+                <span style="color: #8a8aa0; font-size: 0.7rem;">{time_source}</span>
                 <br>
-                <span style="color: #8a8aa0; font-size: 0.7rem;">
-                    👤 {site_data.get('_user_name', 'Authorized User')}
-                </span>
+                <span style="color: #8a8aa0; font-size: 0.7rem;">👤 {site_data.get('_user_name', 'Authorized User')}</span>
                 <br>
-                <span style="color: #34d399; font-size: 0.7rem;">
-                    {device_status} {f"({device_count} device(s))" if device_count > 0 else ""}
-                </span>
+                <span style="color: #34d399; font-size: 0.7rem;">{device_status} {f"({device_count} device(s))" if device_count > 0 else ""}</span>
                 <br>
-                <span style="color: #8a8aa0; font-size: 0.6rem;">
-                    📱 Device: {get_device_id()}
-                </span>
+                <span style="color: #8a8aa0; font-size: 0.6rem;">📱 Device: {get_device_id()}</span>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Site details
-    site_name = safe_str(site_data.get('SITE', ''))
-    plaid = safe_str(site_data.get('PLAID', ''))
-    region = safe_str(site_data.get('REGION', ''))
-    province = safe_str(site_data.get('PROVINCE', ''))
-    municipality = safe_str(site_data.get('MUNICIPALITY', ''))
-    barangay = safe_str(site_data.get('BARANGAY', ''))
-    territory = safe_str(site_data.get('TERRITORY', ''))
-    lat = safe_str(site_data.get('LATITUDE', ''))
-    lon = safe_str(site_data.get('LONGITUDE', ''))
-    site_add = safe_str(site_data.get('SITE_ADD', ''))
-    assign_hub = safe_str(site_data.get('ASSIGN_HUB', ''))
-    towerco = safe_str(site_data.get('TOWERCO', ''))
-    
-    fo_onsite = safe_str(site_data.get('NEW ENGINEER_ANM1', ''))
-    if not fo_onsite:
-        fo_onsite = safe_str(site_data.get('NEW  ENGINEER_ANM1', ''))
-    contact = safe_str(site_data.get('CONTACT NUMBER', ''))
-    
-    fo_display = fo_onsite if fo_onsite else "No FO assigned"
-    fo_class = "fo-name" if fo_onsite else "missing"
-    hub_display = assign_hub if assign_hub else "No assigned"
-    
-    # Map button
-    map_button = ''
-    if lat and lon:
-        try:
-            float(lat); float(lon)
-            maps_url = f"https://www.google.com/maps?q={lat},{lon}"
-            map_button = f'<a href="{maps_url}" target="_blank" class="btn btn-primary">🗺️ Navigate to Google Maps</a>'
-        except:
-            map_button = '<span class="btn btn-outline" style="cursor: not-allowed; opacity: 0.5;">⚠️ Invalid coordinates</span>'
-    else:
-        map_button = '<span class="btn btn-outline" style="cursor: not-allowed; opacity: 0.5;">⚠️ No coordinates available</span>'
-    
-    # Call button
-    call_button = ''
-    if contact:
-        clean_contact = ''.join(ch for ch in contact if ch.isdigit() or ch == '+')
-        if clean_contact:
-            call_button = f'<a href="tel:{clean_contact}" class="btn btn-success">📞 Call FO</a>'
-        else:
-            call_button = f'<span class="btn btn-outline" style="cursor: not-allowed; opacity: 0.5;">📞 {contact}</span>'
-    else:
-        call_button = '<span class="btn btn-outline" style="cursor: not-allowed; opacity: 0.5;">📞 No contact</span>'
-    
-    st.markdown(f"""
-    <div class="site-card">
-        <div class="site-location">{region} · {province} · {municipality} · {barangay}</div>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
-            <span class="tag tag-territory">Territory {territory}</span>
-            <span class="tag tag-towerco">{towerco}</span>
-        </div>
-        <div class="site-details-grid">
-            <div class="detail-item">
-                <span class="detail-label">Address</span>
-                <span class="detail-value">{site_add}</span>
-            </div>
-            <div class="detail-item">
-                <span class="detail-label">📋 ASSIGN HUB</span>
-                <span class="detail-value">{hub_display}</span>
-            </div>
-            <div class="detail-item">
-                <span class="detail-label">👤 FO ONSITE</span>
-                <span class="detail-value {fo_class}">{fo_display}</span>
-            </div>
-            <div class="detail-item">
-                <span class="detail-label">📞 FO NUMBER</span>
-                <span class="detail-value">{contact if contact else "No contact"}</span>
-            </div>
-        </div>
-        <div style="display: flex; gap: 0.5rem; margin-top: 0.7rem; flex-wrap: wrap;">
-            {map_button}
-            {call_button}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    if site_data.get('_token_created') and site_data.get('_token_expires'):
-        try:
-            created = datetime.fromisoformat(site_data['_token_created'])
-            expires = datetime.fromisoformat(site_data['_token_expires'])
-            st.markdown(f"""
-            <div style="color: #6b6b85; font-size: 0.7rem; text-align: center; margin-top: 1rem; padding: 0.5rem; border-top: 1px solid #2a2a44;">
-                🔒 Secure access granted · Created: {created.strftime('%B %d, %Y')} · Expires: {expires.strftime('%B %d, %Y')}
-                {" · 📱 Device verified" if site_data.get('_device_restricted', False) else ""}
-            </div>
-            """, unsafe_allow_html=True)
-        except:
-            pass
+    # Show site details using the site_card function
+    site_card(site_data)
 
-# ------------------------------
-# BOTTOM NAVIGATION
-# ------------------------------
-def bottom_nav():
-    st.markdown("""
-    <div class="bottom-nav">
-        <span class="nav-item active">
-            <span class="nav-icon">📍</span>
-            Site
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ------------------------------
-# API ENDPOINT FOR ANDROID APP (GET METHOD)
-# ------------------------------
+# ============================================================
+# SECTION 10: API ENDPOINT
+# ============================================================
 def api_validate():
-    """
-    API endpoint for Android app validation using GET parameters.
-    URL format: /?api=validate&token=XXX&device_fp=YYY&device_id=ZZZ
-    """
+    """API endpoint for Android app validation"""
     try:
-        # Get parameters from query string
         token = st.query_params.get('token', '').strip()
         device_fingerprint = st.query_params.get('device_fp', '').strip()
         device_id = st.query_params.get('device_id', '').strip()
         
-        # Validate required parameters
         if not token:
             st.json({
                 'success': False,
-                'error': 'Missing token parameter. Please include ?token=YOUR_TOKEN'
+                'error': 'Missing token parameter'
             })
             return
         
-        # Load data
         df = st.session_state.df
         if df is None:
             df = load_excel_data("database.xlsx")
@@ -1521,15 +1023,13 @@ def api_validate():
         if df is None or df.empty:
             st.json({
                 'success': False,
-                'error': 'No data available. Please upload database.xlsx to the server.'
+                'error': 'No data available'
             })
             return
         
-        # Validate token with device fingerprint
         site_data, error = validate_token(token, df, device_fingerprint)
         
         if site_data:
-            # Remove internal fields before sending
             clean_data = {k: v for k, v in site_data.items() if not k.startswith('_')}
             st.json({
                 'success': True,
@@ -1547,12 +1047,11 @@ def api_validate():
             'error': f'Server error: {str(e)}'
         })
 
-# ------------------------------
-# MAIN
-# ------------------------------
+# ============================================================
+# SECTION 11: MAIN
+# ============================================================
 def show_main():
     inject_device_fingerprint_script()
-    
     app_header()
     
     query_params = st.query_params
@@ -1563,10 +1062,10 @@ def show_main():
         return
     
     st.markdown("""
-    <div class="secure-card">
-        <h2>🔐 Secure Site Access</h2>
-        <p>Enter your secure link to access site details.</p>
-        <p class="sub-text">
+    <div style="background: #1a1a2e; border-radius: 16px; padding: 1.5rem; border: 1px solid #2a2a44; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        <h2 style="color: #e8e8f0; margin-bottom: 0.5rem; font-weight: 700;">🔐 Secure Site Access</h2>
+        <p style="color: #c0c0d0; font-size: 0.95rem; line-height: 1.6;">Enter your secure link to access site details.</p>
+        <p style="color: #8a8aa0; font-size: 0.85rem;">
             ⏰ Time is verified online to prevent fraud<br>
             🔒 Each link is unique and expires after 30 days<br>
             📱 <strong style="color: #34d399;">MAC Address / IMEI / Android ID</strong> verification
@@ -1598,17 +1097,27 @@ def show_main():
         st.query_params["page"] = "admin"
         st.rerun()
     
-    bottom_nav()
+    st.markdown("""
+    <div style="position: fixed; bottom: 0; left: 0; right: 0; background: #14141e; border-top: 1px solid #2a2a44; display: flex; justify-content: space-around; padding: 0.4rem 0.5rem; z-index: 1000; backdrop-filter: blur(10px);">
+        <span style="display: flex; flex-direction: column; align-items: center; gap: 0.1rem; padding: 0.3rem 0.8rem; border-radius: 12px; color: #4f8cf7; font-size: 0.55rem; font-weight: 500;">
+            <span style="font-size: 1.2rem;">📍</span>
+            Site
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ------------------------------
+# ============================================================
 # ROUTING
-# ------------------------------
+# ============================================================
 query_params = st.query_params
 
 if 'api' in query_params and query_params['api'] == 'validate':
     api_validate()
 elif 'page' in query_params and query_params['page'] == 'admin':
-    show_admin()
+    if not st.session_state.admin_authenticated:
+        show_admin_login()
+    else:
+        show_admin_dashboard()
 elif 'token' in query_params and query_params['token']:
     show_site_viewer(query_params['token'])
 else:
